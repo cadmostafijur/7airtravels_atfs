@@ -1,3 +1,5 @@
+# Optional Docker setup — NOT required when using Neon PostgreSQL.
+# For local dev and production, use: npm run dev:all / npm run start + npm run start:worker
 services:
   db:
     image: postgres:16-alpine

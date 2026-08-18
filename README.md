@@ -66,19 +66,13 @@ User enrollment on the physical terminal is **not invented** here. Map `deviceUs
 
 ## Quick start (Windows)
 
-1. Copy environment file:
+1. Copy environment file and set your **Neon** `DATABASE_URL` + `DIRECT_URL` (see `.env.example`):
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-2. Start PostgreSQL (Docker):
-
-```powershell
-docker compose up -d db
-```
-
-3. Generate client, migrate, seed:
+2. Generate client, migrate, seed (uses Neon — **no Docker, no local PostgreSQL**):
 
 ```powershell
 npx prisma generate
@@ -86,13 +80,13 @@ npx prisma migrate deploy
 npx tsx prisma/seed.ts
 ```
 
-4. Run the web app and the sync/realtime worker:
+3. Run the web app and the sync/realtime worker:
 
 ```powershell
 npm run dev:all
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000)
+4. Open [http://localhost:3000](http://localhost:3000)
 
 Default admin (change immediately):
 
@@ -178,18 +172,21 @@ Notification key: `attendanceId + eventType + recipient`. Successful SMS is neve
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
+**Docker is not required.** With Neon PostgreSQL you deploy two Node processes on a VPS or office server:
+
+1. **Web** — `npm run build && npm run start` (port 3000)
+2. **Worker** — `npm run start:worker` (port 3001, K50A sync + Socket.IO)
+
 Minimum:
 
-- Place the app server on the same LAN as the K50A, or reach it through VPN
+- VPS or office PC on the same LAN as the K50A (or VPN)
+- **Neon** for PostgreSQL (`DATABASE_URL` + `DIRECT_URL` in `.env`)
 - HTTPS in front of the web UI (nginx / Caddy)
-- Do **not** port-forward `4370` to the internet
-- `SIMULATION_MODE=false`
+- Do **not** port-forward K50A TCP `4370` to the internet
+- `SIMULATION_MODE=false`, `DEVICE_ADAPTER=k50a`
 - Strong `SESSION_SECRET` and `WORKER_INTERNAL_SECRET`
-- `DEVICE_ADAPTER=k50a`
 
-```powershell
-docker compose up -d --build
-```
+`docker-compose.yml` exists only as an **optional** alternative if you prefer containers. You can ignore it entirely.
 
 ---
 
