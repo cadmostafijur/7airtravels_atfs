@@ -12,7 +12,10 @@
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
+    "db:check": "tsx scripts/db-check.ts",
     "probe": "tsx scripts/device-probe.ts"
   },
   "prisma": {
