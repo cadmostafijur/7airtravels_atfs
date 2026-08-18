@@ -16,6 +16,11 @@ Employee fingerprint
 
 The K50A is the source of truth for device-side punches. If the server or internet is down, the terminal keeps storing transactions. When the backend returns, synchronization downloads missing punches and **deduplicates** them.
 
+## বাংলা নির্দেশিকা
+
+সম্পূর্ণ ধাপে ধাপে বাংলা গাইড: [docs/BANGLA-GUIDE.md](docs/BANGLA-GUIDE.md)  
+লগইনের পর সাইডবারে **বাংলা গাইড** মেনু থেকেও পড়তে পারবেন।
+
 ---
 
 ## What is verified vs not verified

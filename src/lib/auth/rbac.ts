@@ -4,6 +4,7 @@ import { AuthError } from "@/lib/errors";
 export type Permission =
   | "dashboard"
   | "attendance"
+  | "attendance.write"
   | "reports"
   | "employees"
   | "employees.write"
@@ -21,6 +22,7 @@ export type Permission =
 const matrix: Record<Permission, AdminRole[]> = {
   dashboard: ["SUPER_ADMIN", "ADMIN", "VIEWER"],
   attendance: ["SUPER_ADMIN", "ADMIN", "VIEWER"],
+  "attendance.write": ["SUPER_ADMIN", "ADMIN"],
   reports: ["SUPER_ADMIN", "ADMIN", "VIEWER"],
   employees: ["SUPER_ADMIN", "ADMIN"],
   "employees.write": ["SUPER_ADMIN", "ADMIN"],

@@ -20,6 +20,7 @@ import {
   Users,
   FileBarChart,
   FlaskConical,
+  BookOpen,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -33,6 +34,7 @@ const nav = [
   { href: "/admin/attendance", label: "Attendance", icon: Fingerprint, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/employees", label: "People", icon: Users, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/reports", label: "Reports", icon: FileBarChart, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
+  { href: "/admin/help", label: "বাংলা গাইড", icon: BookOpen, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/devices", label: "K50A Devices", icon: Smartphone, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/shifts", label: "Shifts", icon: Timer, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/holidays", label: "Holidays", icon: CalendarDays, roles: ["SUPER_ADMIN", "ADMIN"] },

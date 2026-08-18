@@ -68,7 +68,7 @@ export default function EmployeesPage() {
       <PageHeader
         eyebrow="Directory"
         title="Employees"
-        description="Map each person to the K50A device user ID. Fingerprint templates stay on the terminal."
+        description="K50A-তে User ID দিয়ে এনরোল করুন; এখানে Device User ID মিলিয়ে নাম/বিভাগ রাখুন। অ্যাডমিন ওয়েব থেকে আঙুল এনরোল করতে পারে না।"
       />
       <div className="mb-4 flex gap-2">
         <Input placeholder="Search name, code, or device user ID" value={q} onChange={(e) => setQ(e.target.value)} />
