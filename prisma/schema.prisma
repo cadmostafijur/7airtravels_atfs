@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  VIEWER
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+enum DeviceAdapterType {
+  k50a
+  mock
+}
+
+enum AttendanceType {
+  CHECK_IN
+  CHECK_OUT
+  BREAK_IN
+  BREAK_OUT
+  OVERTIME_IN
+  OVERTIME_OUT
+  UNKNOWN
+}
+
+enum VerificationMethod {
+  FINGERPRINT
+  PASSWORD
+  CARD
+  FACE
+  OTHER
+}
+
+enum AttendanceSource {
+  DEVICE
+  MANUAL
+  SIMULATION
+}
+
+enum DailyStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EARLY_LEAVE
+  HALF_DAY
+  LEAVE
+  HOLIDAY
+  WEEKEND
+  OVERTIME
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum SmsDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum SyncRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model Admin {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  role         AdminRole     @default(ADMIN)
+  status       AccountStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  auditLogs    AuditLog[]
+
+  @@index([role, status])
+}
+
+model Department {
+  id         String                   @id @default(cuid())
+  name       String                   @unique
+  code       String                   @unique
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+  employees  Employee[]
+  summaries  DailyAttendanceSummary[]
+}
+
+model Employee {
+  id             String                   @id @default(cuid())
+  employeeCode   String                   @unique
+  name           String
+  phone          String?
+  email          String?
+  departmentId   String?
+  designation    String?
+  deviceUserId   String
+  status         AccountStatus            @default(ACTIVE)
+  joinedAt       DateTime                 @default(now())
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  department     Department?              @relation(fields: [departmentId], references: [id])
+  attendances    Attendance[]
+  summaries      DailyAttendanceSummary[]
+  leaves         Leave[]
+
+  @@index([deviceUserId])
+  @@index([departmentId, status])
+  @@index([name])
+}
+
+model Device {
+  id               String            @id @default(cuid())
+  name             String
+  model            String            @default("K50A")
+  adapterType      DeviceAdapterType @default(k50a)
+  serialNumber     String?
+  ipAddress        String
+  port             Int               @default(4370)
+  location         String?
+  commKey          Int               @default(0)
+  timeoutMs        Int               @default(10000)
+  status           DeviceStatus      @default(UNKNOWN)
+  lastConnectedAt  DateTime?
+  lastSyncAt       DateTime?
+  lastError        String?
+  totalSynced      Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  attendances      Attendance[]
+  syncLogs         SyncLog[]
+  commLogs         DeviceCommLog[]
+
+  @@index([status])
+  @@index([ipAddress, port])
+}
+
+model Attendance {
+  id                   String             @id @default(cuid())
+  employeeId           String?
+  deviceId             String
+  deviceUserId         String
+  deviceTransactionId  String?
+  timestamp            DateTime
+  attendanceType       AttendanceType     @default(UNKNOWN)
+  verificationMethod   VerificationMethod @default(FINGERPRINT)
+  source               AttendanceSource   @default(DEVICE)
+  rawPayload           Json?
+  createdAt            DateTime           @default(now())
+  employee             Employee?          @relation(fields: [employeeId], references: [id])
+  device               Device             @relation(fields: [deviceId], references: [id])
+  smsLogs              SmsLog[]
+
+  @@unique([deviceId, deviceUserId, timestamp], name: "uniq_raw_punch")
+  @@index([employeeId, timestamp])
+  @@index([deviceId, timestamp])
+  @@index([deviceTransactionId])
+  @@index([timestamp])
+  @@index([source])
+}
+
+model DailyAttendanceSummary {
+  id             String        @id @default(cuid())
+  employeeId     String
+  departmentId   String?
+  workDate       DateTime      @db.Date
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  status         DailyStatus
+  lateMinutes    Int           @default(0)
+  earlyMinutes   Int           @default(0)
+  overtimeMinutes Int          @default(0)
+  workedMinutes  Int           @default(0)
+  notes          String?
+  shiftId        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  employee       Employee      @relation(fields: [employeeId], references: [id])
+  department     Department?   @relation(fields: [departmentId], references: [id])
+  shift          Shift?        @relation(fields: [shiftId], references: [id])
+
+  @@unique([employeeId, workDate])
+  @@index([workDate, status])
+  @@index([departmentId, workDate])
+}
+
+model Shift {
+  id              String                   @id @default(cuid())
+  name            String                   @unique
+  isDefault       Boolean                  @default(false)
+  officeStart     String
+  lateThreshold   String
+  officeEnd       String
+  halfDayAfter    String                   @default("13:00")
+  overtimeAfter   String                   @default("18:30")
+  weekendDays     Int[]                    @default([5, 6])
+  timezone        String                   @default("Asia/Dhaka")
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  summaries       DailyAttendanceSummary[]
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  date        DateTime @unique @db.Date
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Leave {
+  id          String      @id @default(cuid())
+  employeeId  String
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, startDate, endDate])
+  @@index([status])
+}
+
+model SmsSetting {
+  id                 String   @id @default("default")
+  enabled            Boolean  @default(false)
+  adminPhone1        String?
+  adminPhone2        String?
+  adminPhone3        String?
+  notifyOnAttendance Boolean  @default(true)
+  notifyOnLate       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SmsLog {
+  id                String             @id @default(cuid())
+  notificationKey   String             @unique
+  recipient         String
+  message           String
+  eventType         String
+  status            SmsDeliveryStatus  @default(PENDING)
+  providerResponse  String?
+  attendanceId      String?
+  retryCount        Int                @default(0)
+  sentAt            DateTime?
+  createdAt         DateTime           @default(now())
+  attendance        Attendance?        @relation(fields: [attendanceId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([attendanceId])
+  @@index([recipient])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminId     String?
+  action      String
+  entity      String
+  entityId    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+  @@index([entity, entityId])
+}
+
+model SyncLog {
+  id              String         @id @default(cuid())
+  deviceId        String
+  status          SyncRunStatus  @default(RUNNING)
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  recordsRead     Int            @default(0)
+  recordsInserted Int            @default(0)
+  recordsSkipped  Int            @default(0)
+  recordsFailed   Int            @default(0)
+  errorMessage    String?
+  device          Device         @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, startedAt])
+  @@index([status])
+}
+
+model DeviceCommLog {
+  id        String   @id @default(cuid())
+  deviceId  String
+  action    String
+  success   Boolean
+  message   String
+  details   Json?
+  createdAt DateTime @default(now())
+  device    Device   @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, createdAt])
+  @@index([action, createdAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

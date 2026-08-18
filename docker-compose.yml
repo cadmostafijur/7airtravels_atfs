@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: atfs
+      POSTGRES_PASSWORD: atfs
+      POSTGRES_DB: atfs
+    ports:
+      - "5432:5432"
+    volumes:
+      - atfs_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atfs -d atfs"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://atfs:atfs@db:5432/atfs?schema=public
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+  worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://atfs:atfs@db:5432/atfs?schema=public
+    ports:
+      - "3001:3001"
+    command: sh -c "npx prisma migrate deploy && npx tsx src/server/worker.ts"
+
+volumes:
+  atfs_pg:
