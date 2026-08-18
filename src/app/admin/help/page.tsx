@@ -106,7 +106,7 @@ export default function HelpPage() {
       </div>
       <Card className="mt-6">
         <CardContent className="p-5 text-sm text-muted">
-          সম্পূর্ণ PDF-style গাইড: প্রজেক্ট ফোল্ডারে{" "}
+          Full markdown guide in the project folder:{" "}
           <code className="rounded bg-paper px-1">docs/BANGLA-GUIDE.md</code>
         </CardContent>
       </Card>

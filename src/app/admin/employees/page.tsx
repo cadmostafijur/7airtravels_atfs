@@ -68,7 +68,7 @@ export default function EmployeesPage() {
       <PageHeader
         eyebrow="Directory"
         title="Employees"
-        description="K50A-তে User ID দিয়ে এনরোল করুন; এখানে Device User ID মিলিয়ে নাম/বিভাগ রাখুন। অ্যাডমিন ওয়েব থেকে আঙুল এনরোল করতে পারে না।"
+        description="Enroll fingerprints on the K50A with a User ID, then map the same Device User ID here. Admins cannot enroll fingerprints from the web."
       />
       <div className="mb-4 flex gap-2">
         <Input placeholder="Search name, code, or device user ID" value={q} onChange={(e) => setQ(e.target.value)} />

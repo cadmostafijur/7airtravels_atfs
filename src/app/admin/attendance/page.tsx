@@ -159,9 +159,9 @@ export default function AttendancePage() {
   return (
     <div>
       <PageHeader
-        eyebrow="দৈনিক রেজিস্টার"
+        eyebrow="Processed attendance"
         title="Daily register"
-        description="K50A থেকে আসা উপস্থিতি সারাংশ। অ্যাডমিন স্ট্যাটাস ও সময় সংশোধন করতে পারেন। আঙুলের রAW লগ আলাদা থাকে।"
+        description="Summaries from K50A punches. Admins can edit status and times. Raw fingerprint logs are kept separately."
         actions={
           canWrite ? (
             <Button
