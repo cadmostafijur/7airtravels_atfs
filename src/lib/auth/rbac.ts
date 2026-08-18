@@ -31,7 +31,7 @@ const matrix: Record<Permission, AdminRole[]> = {
   shifts: ["SUPER_ADMIN", "ADMIN"],
   holidays: ["SUPER_ADMIN", "ADMIN"],
   leaves: ["SUPER_ADMIN", "ADMIN"],
-  settings: ["SUPER_ADMIN"],
+  settings: ["SUPER_ADMIN", "ADMIN", "VIEWER"],
   audit: ["SUPER_ADMIN"],
   simulation: ["SUPER_ADMIN", "ADMIN"],
 };

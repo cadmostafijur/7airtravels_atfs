@@ -38,7 +38,7 @@ const nav = [
   { href: "/admin/holidays", label: "Holidays", icon: CalendarDays, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/leaves", label: "Leave", icon: ClipboardList, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/sms", label: "Admin SMS", icon: MessageSquare, roles: ["SUPER_ADMIN", "ADMIN"] },
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["SUPER_ADMIN", "ADMIN"] },
+  { href: "/admin/settings", label: "My account", icon: Settings, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/audit-logs", label: "Audit", icon: Shield, roles: ["SUPER_ADMIN"] },
   { href: "/admin/simulation", label: "Simulation", icon: FlaskConical, roles: ["SUPER_ADMIN", "ADMIN"], sim: true },
 ];
