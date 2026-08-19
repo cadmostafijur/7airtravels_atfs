@@ -92,8 +92,22 @@ export default function EmployeesPage() {
       <PageHeader
         eyebrow="Directory"
         title="Employees"
-        description="Add people, map K50A Device User IDs, and manage status. Fingerprints stay on the terminal."
+        description="The website does not send employees to K50A automatically. You enroll on the device first, then enter the same User ID here."
       />
+      <Card className="mb-4 border-teal/30 bg-teal/5">
+        <CardContent className="space-y-2 p-5 text-sm leading-relaxed">
+          <p className="font-semibold text-teal">How K50A and the website connect</p>
+          <ol className="list-decimal space-y-1 pl-5 text-muted">
+            <li>On K50A: enroll fingerprint and set User ID (example: 1001).</li>
+            <li>On this website: add employee and put the same number in K50A User ID.</li>
+            <li>When they scan, K50A sends User ID 1001 → website finds that employee → attendance is saved.</li>
+          </ol>
+          <p className="text-xs text-muted">
+            If IDs do not match, the punch is still saved but shows as unknown until you fix Device User ID.
+            Check K50A users: Devices → your device → Read users.
+          </p>
+        </CardContent>
+      </Card>
       <div className="mb-4 flex flex-wrap gap-2">
         <Input className="max-w-xs" placeholder="Search name, ID, or device UID" value={q} onChange={(e) => setQ(e.target.value)} />
         <Select className="w-44" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
@@ -182,8 +196,13 @@ export default function EmployeesPage() {
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div>
-              <Label>Device user ID</Label>
-              <Input value={form.deviceUserId} onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })} />
+              <Label>K50A User ID (same as on device)</Label>
+              <Input
+                placeholder="e.g. 1001"
+                value={form.deviceUserId}
+                onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-muted">Must exactly match the User ID you set on the K50A terminal.</p>
             </div>
             <div>
               <Label>Designation</Label>
