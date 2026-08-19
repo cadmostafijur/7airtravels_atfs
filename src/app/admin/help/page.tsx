@@ -5,13 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const quickSteps = [
   { step: "১", where: "K50A মেশিন", action: "Fingerprint নিন + User ID দিন (যেমন 1001)" },
-  { step: "২", where: "People (ওয়েব)", action: "নাম, ফোন, বিভাগ + K50A User ID = 1001 (একই নম্বর)" },
+  { step: "২", where: "Admin (Employee records)", action: "নাম, ফোন, বিভাগ + K50A User ID = 1001 (admin add করে)" },
   { step: "৩", where: "K50A Devices", action: "Read users → 1001 আছে কিনা দেখুন" },
   { step: "৪", where: "Scan / Sync", action: "আঙুল দিন → Sync now → Dashboard-এ নাম আসে" },
 ];
 
 const wrongVsRight = [
-  { wrong: "People-এ add করলেই K50A জানে", right: "K50A-তে আলাদা enroll করতে হবে" },
+  { wrong: "কর্মচারী ওয়েবসাইট login করে", right: "শুধু Admin login করে — কর্মচারী K50A scan only" },
+  { wrong: "Employee records-এ add করলেই K50A জানে", right: "K50A-তে আলাদা enroll করতে হবে" },
   { wrong: "ওয়েব থেকে fingerprint দেওয়া যায়", right: "Fingerprint শুধু K50A-তে" },
   { wrong: "নাম মিললেই চলবে", right: "K50A User ID নম্বর মিলতে হবে" },
 ];
@@ -45,13 +46,13 @@ const sections = [
     ],
   },
   {
-    title: "৪. ওয়েবসাইটে কর্মচারী (People)",
+    title: "৪. Admin employee record যোগ করা (কর্মচারী login করে না)",
     body: [
-      "People → Add employee",
+      "Employee records → Add employee (শুধু admin)",
       "Code, Name, Phone, Department, Designation দিন",
       "K50A User ID = K50A-তে দেওয়া User ID (হুবহু একই)",
-      "Create — এখন scan করলে ওই কর্মচারী চেনা যাবে",
-      "Edit / Deactivate: তালিকায় নামে ক্লিক",
+      "Create — scan করলে admin dashboard-এ ওই কর্মচারী দেখাবে",
+      "কর্মচারীর কোনো website login/password নেই",
     ],
   },
   {
@@ -59,7 +60,7 @@ const sections = [
     body: [
       "কর্মচারী K50A-তে scan → মেশিনে লগ save",
       "Worker (পোর্ট 3001) বা Sync now → Neon DB",
-      "deviceUserId (1001) দিয়ে People-এ employee match",
+      "deviceUserId (1001) দিয়ে Employee records-এ employee match",
       "Dashboard live feed + Attendance daily register update",
     ],
   },
@@ -90,12 +91,22 @@ export default function HelpPage() {
         description="K50A ও ওয়েবসাইট কীভাবে কাজ করে — সহজ বাংলায়"
       />
 
+      <Card className="mb-6 border-navy/30 bg-navy/5">
+        <CardContent className="space-y-3 p-5">
+          <h2 className="font-semibold text-navy">🔒 Admin-only website</h2>
+          <p className="text-sm leading-relaxed">
+            এই ওয়েবসাইট <strong>শুধু Admin</strong> use করবেন (HR, Manager)। সাধারণ কর্মচারী login করে না — তারা
+            শুধু <strong>K50A-তে আঙুল scan</strong> করে। Admin Employee records-এ তাদের তথ্য রাখে।
+          </p>
+        </CardContent>
+      </Card>
+
       <Card className="mb-6 border-teal/40 bg-teal/5">
         <CardContent className="space-y-4 p-5">
           <div>
             <h2 className="font-semibold text-teal">⭐ সবচেয়ে গুরুত্বপূর্ণ প্রশ্ন</h2>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong>People-এ employee add করলে K50A কীভাবে জানে?</strong>
+              <strong>Employee records-এ add করলে K50A কীভাবে জানে?</strong>
               <br />
               <strong>উত্তর: জানে না।</strong> ওয়েবসাইট K50A-তে কাউকে পাঠায় না। আপনি K50A-তে fingerprint
               enroll করবেন, তারপর ওয়েবসাইটে <strong>একই User ID নম্বর</strong> দিয়ে employee যোগ করবেন।

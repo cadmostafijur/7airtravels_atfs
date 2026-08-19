@@ -15,8 +15,9 @@ const ibmPlex = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "7 Air Travels ATFS",
-  description: "Fingerprint attendance management for 7 Air Travels Limited",
+  title: "7 Air Travels ATFS — Admin",
+  description: "Administrator console for fingerprint attendance. Employees do not log in here.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -15,7 +15,7 @@
 | ধাপ | কোথায় | কী করবেন |
 |-----|--------|----------|
 | ১ | **K50A মেশিন** | আঙুলের ছাপ নিন + User ID দিন → `1001` |
-| ২ | **ওয়েবসাইট (People)** | নাম “রহিম”, ফোন, বিভাগ + **K50A User ID = `1001`** |
+| ২ | **Admin (Employee records)** | নাম “রহিম”, ফোন, বিভাগ + **K50A User ID = `1001`** |
 | ৩ | **K50A মেশিন** | রহিম আঙুল দিল → মেশিন পাঠায় “User 1001 scanned” |
 | ৪ | **ওয়েবসাইট** | `1001` খুঁজে “রহিম” পায় → attendance save |
 
@@ -31,15 +31,35 @@ Scan → ওয়েবসাইট attendance “রহিম” নামে 
 
 | ভুল | সত্যি |
 |-----|-------|
-| “People-এ add করলেই K50A-তে user তৈরি হবে” | **না** — K50A-তে আলাদা enroll করতে হবে |
+| “Employee records-এ add করলেই K50A-তে user তৈরি হবে” | **না** — K50A-তে আলাদা enroll করতে হবে |
 | “ওয়েব থেকে fingerprint দেওয়া যায়” | **না** — fingerprint শুধু K50A-তে |
 | “নাম মিললেই চলবে” | **না** — **User ID নম্বর** মিলতে হবে |
 
 ### ✅ সঠিক ক্রম
 
 1. **আগে** K50A-তে fingerprint + User ID  
-2. **তারপর** ওয়েবসাইটে employee + **একই User ID**  
+2. **তারপর** admin ওয়েবসাইটে employee record + **একই User ID**  
 3. **Sync** (অটো প্রতি ৩০ সেক.) বা **Sync now** চাপুন  
+
+---
+
+## ⭐ কে ওয়েবসাইট use করবে? (Admin vs Employee)
+
+| কে | K50A মেশিন | ATFS ওয়েবসাইট |
+|----|------------|----------------|
+| **সাধারণ কর্মচারী** | ✅ আঙুল scan | ❌ **login/use করে না** |
+| **Admin (HR/Manager)** | ❌ (ঐচ্ছিক) | ✅ login করে manage করে |
+
+**গুরুত্বপূর্ণ:**
+- কর্মচারীদের **কোনো login/password নেই** — ওয়েবসাইটে employee portal নেই।
+- ওয়েবসাইট = **শুধু admin console** (SUPER_ADMIN, ADMIN, VIEWER)।
+- Admin **Employee records** পেজে কর্মচারীর **তথ্য রাখে** — কর্মচারী নিজে ওয়েব open করে না।
+- কর্মচারী শুধু **K50A-তে আঙুল দেয়** — attendance admin dashboard-এ দেখে।
+
+```
+কর্মচারী  →  K50A scan only
+Admin     →  Vercel website (login) → attendance দেখা/সংশোধন
+```
 
 ---
 
@@ -59,8 +79,8 @@ Scan → ওয়েবসাইট attendance “রহিম” নামে 
 | শব্দ | সহজ বাংলায় |
 |------|-------------|
 | **K50A** | অফিসের fingerprint মেশিন (LAN/Ethernet) |
-| **ওয়েবসাইট (ATFS)** | Admin dashboard — attendance দেখার জায়গা |
-| **K50A User ID** | মেশিনে user তৈরি করার সময় যে নম্বর (যেমন `1001`) — People-এ **একই নম্বর** দিন |
+| **ওয়েবসাইট (ATFS)** | **Admin-only** dashboard — attendance manage; কর্মচারী login করে না |
+| **K50A User ID** | মেশিনে user তৈরি করার সময় যে নম্বর (যেমন `1001`) — Employee records-এ **একই নম্বর** দিন |
 | **Fingerprint** | আঙুলের ছাপ — **শুধু K50A-তে**, ওয়েবে নয় |
 | **Sync** | K50A থেকে লগ টেনে ওয়েবসাইট DB-তে আনা |
 | **Daily register** | প্রতিদিন Present / Late / Absent সারাংশ |
@@ -217,7 +237,7 @@ SIMULATION_MODE=false
     আপনি এখানে enroll করেন              আপনি এখানে profile রাখেন
 ```
 
-**মনে রাখুন:** People-এ employee create = ওয়েব DB-তে save। K50A **automatic জানে না**।  
+**মনে রাখুন:** Employee records-এ create = ওয়েব DB-তে save। K50A **automatic জানে না**।  
 যোগাযোগের একমাত্র চাবি = **K50A User ID নম্বর**।  
 অ্যাডমিন ওয়েবসাইট থেকে fingerprint এনরোল করতে **পারে না**।
 
@@ -235,7 +255,7 @@ K50A ডিভাইস মেনু (মডেল ভিন্ন হতে প
 
 ## ধাপ ৪.২ — ওয়েবসাইটে কর্মচারী যোগ করা (তারপর এটা)
 
-1. **People** মেনু  
+1. **Employee records** মেনু  
 2. ডানে **Add employee**:
 
 | ফিল্ড | উদাহরণ | বাধ্যতামূলক | নোট |
@@ -255,7 +275,7 @@ K50A ডিভাইস মেনু (মডেল ভিন্ন হতে প
 ## ধাপ ৪.৩ — মিল যাচাই (checklist)
 
 - [ ] K50A Devices → **Read users** → `1001` আছে?  
-- [ ] People → Device UID column-এ `1001` আছে?  
+- [ ] Employee records → Device UID column-এ `1001` আছে?  
 - [ ] Employee status = **ACTIVE**?  
 - [ ] Worker চলছে বা **Sync now** চাপেছেন?  
 - [ ] Test scan → Dashboard live feed-এ **নাম** আসে?  
@@ -264,13 +284,13 @@ K50A ডিভাইস মেনু (মডেল ভিন্ন হতে প
 
 | লক্ষণ | কারণ | সমাধান |
 |--------|------|--------|
-| Scan হয়, নাম আসে না | User ID মিলেনি | People-এ K50A User ID ঠিক করুন |
+| Scan হয়, নাম আসে না | User ID মিলেনি | Employee records-এ K50A User ID ঠিক করুন |
 | Read users-এ নেই | K50A-তে enroll হয়নি | K50A-তে New User + Fingerprint |
 | পুরনো scan আসে না | Sync হয়নি | Sync now / Worker চালু আছে কিনা দেখুন |
 
 ## ধাপ ৪.৪ — কর্মচারী সম্পাদনা / নিষ্ক্রিয়
 
-1. **People** → নামে ক্লিক  
+1. **Employee records** → নামে ক্লিক  
 2. নাম, ফোন, Device User ID, Status (ACTIVE/INACTIVE) বদল  
 3. **Save**  
 4. **Deactivate** = কাজ থেকে সরানো (ডিলিট নয়, ইতিহাস থাকে)  
@@ -365,7 +385,7 @@ SMS (৩ অ্যাডমিন নম্বর, SMS মেনুতে Enable
 | Dashboard দেখা | ✓ | ✓ | ✓ |
 | Attendance দেখা | ✓ | ✓ | ✓ |
 | Attendance Edit/Delete/Add | ✓ | ✓ | ✗ |
-| People (কর্মচারী) | ✓ | ✓ | ✗ |
+| Employee records (admin) | ✓ | ✓ | ✗ |
 | K50A Devices + Sync | ✓ | ✓ | ✗ |
 | Reports + Export | ✓ | ✓ | ✓ |
 | SMS Settings | ✓ | ✓ | ✗ |
@@ -396,8 +416,8 @@ SMS (৩ অ্যাডমিন নম্বর, SMS মেনুতে Enable
 | Test Connection | ✓ | Device diagnostic |
 | Sync attendance | ✓ | Sync now / Worker |
 | Fingerprint on device | ✓ | K50A মেনু (ওয়েব নয়) |
-| Employee add/edit | ✓ | People |
-| Device User ID map | ✓ | People |
+| Employee add/edit (admin) | ✓ | Employee records |
+| Device User ID map | ✓ | Employee records |
 | Daily register view | ✓ | Attendance |
 | Daily register edit | ✓ | Attendance → Edit |
 | Daily register delete | ✓ | Attendance → Delete |

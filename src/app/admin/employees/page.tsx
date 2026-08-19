@@ -90,10 +90,24 @@ export default function EmployeesPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Directory"
+        eyebrow="Admin · Employee records"
         title="Employees"
-        description="The website does not send employees to K50A automatically. You enroll on the device first, then enter the same User ID here."
+        description="Admin-only page. You manage employee records here. Staff never log in — they only scan on K50A."
       />
+      <Card className="mb-4 border-navy/20 bg-navy/5">
+        <CardContent className="space-y-2 p-5 text-sm leading-relaxed">
+          <p className="font-semibold text-navy">Who uses this website?</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted">
+            <li>
+              <strong>Administrators</strong> (SUPER_ADMIN, ADMIN, VIEWER) — log in here to manage attendance and records.
+            </li>
+            <li>
+              <strong>Employees</strong> — do <strong>not</strong> use this website. No employee login exists. They only
+              scan fingerprint on K50A.
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
       <Card className="mb-4 border-teal/30 bg-teal/5">
         <CardContent className="space-y-2 p-5 text-sm leading-relaxed">
           <p className="font-semibold text-teal">How K50A and the website connect</p>

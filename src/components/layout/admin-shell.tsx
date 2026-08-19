@@ -32,7 +32,7 @@ type Me = { name: string; email: string; role: string; simulation: boolean };
 const nav = [
   { href: "/admin/dashboard", label: "Operations", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/attendance", label: "Attendance", icon: Fingerprint, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
-  { href: "/admin/employees", label: "People", icon: Users, roles: ["SUPER_ADMIN", "ADMIN"] },
+  { href: "/admin/employees", label: "Employee records", icon: Users, roles: ["SUPER_ADMIN", "ADMIN"] },
   { href: "/admin/reports", label: "Reports", icon: FileBarChart, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/help", label: "Bangla Guide", icon: BookOpen, roles: ["SUPER_ADMIN", "ADMIN", "VIEWER"] },
   { href: "/admin/devices", label: "K50A Devices", icon: Smartphone, roles: ["SUPER_ADMIN", "ADMIN"] },
@@ -69,7 +69,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
         <Image src="/brand/logo.png" alt="7 Air Travels" width={44} height={44} className="rounded-full bg-white" />
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-teal-2">Office Control</div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-teal-2">Admin console</div>
           <div className="font-semibold leading-tight">ATFS Attendance</div>
         </div>
       </div>
@@ -120,7 +120,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <div className="text-sm text-muted">
-            7 Air Travels Limited · Fingerprint attendance
+            Administrators only · Employees use K50A fingerprint, not this website
           </div>
           <div className="rounded-full bg-paper px-3 py-1 font-mono text-xs uppercase tracking-wider text-teal">
             {me?.role?.replaceAll("_", " ")}

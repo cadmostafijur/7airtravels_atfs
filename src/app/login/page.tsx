@@ -59,8 +59,11 @@ function LoginForm() {
           <div className="mb-6 lg:hidden">
             <Image src="/brand/logo.png" alt="7 Air Travels" width={56} height={56} className="rounded-full" />
           </div>
-          <h2 className="text-2xl font-semibold">Sign in</h2>
-          <p className="mt-1 mb-6 text-sm text-muted">Administrators only. Sessions use HTTP-only cookies.</p>
+          <h2 className="text-2xl font-semibold">Admin sign in</h2>
+          <p className="mt-1 mb-6 text-sm text-muted">
+            This website is for administrators only. Regular employees do not log in — they scan fingerprint on the K50A
+            device only.
+          </p>
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mb-4" required />
           <Label htmlFor="password">Password</Label>
