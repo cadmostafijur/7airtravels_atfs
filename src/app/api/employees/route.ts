@@ -21,16 +21,22 @@ export async function GET(request: Request) {
     await requireApiSession(request, "employees");
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
+    const departmentId = searchParams.get("departmentId") || undefined;
+    const status = searchParams.get("status") || undefined;
     const employees = await prisma.employee.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { employeeCode: { contains: q, mode: "insensitive" } },
-              { deviceUserId: { contains: q } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...(departmentId ? { departmentId } : {}),
+        ...(status ? { status: status as "ACTIVE" | "INACTIVE" } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { employeeCode: { contains: q, mode: "insensitive" } },
+                { deviceUserId: { contains: q } },
+              ],
+            }
+          : {}),
+      },
       include: { department: true },
       orderBy: { employeeCode: "asc" },
     });

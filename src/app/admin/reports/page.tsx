@@ -5,33 +5,97 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/field";
+import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
-import { formatDate, formatTime } from "@/lib/time";
 
-type Row = {
-  id: string;
-  workDate: string;
-  status: string;
-  checkInAt: string | null;
-  checkOutAt: string | null;
-  lateMinutes: number;
-  earlyMinutes: number;
-  overtimeMinutes: number;
-  employee: { name: string; employeeCode: string; department: { name: string } | null };
+type Report = {
+  type: string;
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
 };
 
+type Employee = { id: string; name: string; employeeCode: string };
+type Dept = { id: string; name: string };
+
+const types = [
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "monthly", label: "Monthly" },
+  { id: "employee", label: "Employee-wise" },
+  { id: "department", label: "Department-wise" },
+  { id: "late", label: "Late" },
+  { id: "absent", label: "Absent" },
+  { id: "hours", label: "Working hours" },
+  { id: "leave", label: "Leave" },
+  { id: "raw", label: "Raw punches" },
+];
+
+function cell(row: Record<string, unknown>, column: string) {
+  const key = column.toLowerCase();
+  if (key === "employee") return String(row.name ?? "");
+  if (key === "code") return String(row.employeeCode ?? "");
+  if (key === "in") return String(row.checkIn ?? "");
+  if (key === "out") return String(row.checkOut ?? "");
+  if (key === "late") return String(row.lateMinutes ?? row.late ?? "");
+  if (key === "early") return String(row.earlyMinutes ?? "");
+  if (key === "ot") return String(row.overtimeMinutes ?? "");
+  if (key === "hours") return String(row.hours ?? "");
+  if (key === "status" || key === "leave") {
+    return String(row.status ?? row.leave ?? "");
+  }
+  const map: Record<string, string> = {
+    date: "date",
+    name: "name",
+    department: "department",
+    from: "from",
+    to: "to",
+    reason: "reason",
+    time: "time",
+    device: "device",
+    method: "method",
+    source: "source",
+    week: "week",
+    month: "month",
+    present: "present",
+    absent: "absent",
+  };
+  return String(row[map[key] ?? key] ?? row[column] ?? "");
+}
+
 export default function ReportsPage() {
-  const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
-  const [rows, setRows] = useState<Row[]>([]);
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const [type, setType] = useState("daily");
+  const [from, setFrom] = useState(monthStart);
+  const [to, setTo] = useState(today);
+  const [q, setQ] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [status, setStatus] = useState("");
+  const [report, setReport] = useState<Report | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Dept[]>([]);
+
+  function query() {
+    const qs = new URLSearchParams({ type, from, to });
+    if (q) qs.set("q", q);
+    if (employeeId) qs.set("employeeId", employeeId);
+    if (departmentId) qs.set("departmentId", departmentId);
+    if (status) qs.set("status", status);
+    return qs.toString();
+  }
 
   async function load() {
-    setRows(await api<Row[]>(`/api/reports?from=${from}&to=${to}`));
+    setReport(await api<Report>(`/api/reports?${query()}`));
   }
 
   useEffect(() => {
-    void load();
+    void Promise.all([load(), api<Employee[]>("/api/employees"), api<Dept[]>("/api/departments")]).then(
+      ([, emps, deps]) => {
+        setEmployees(emps);
+        setDepartments(deps);
+      },
+    );
   }, []);
 
   return (
@@ -39,22 +103,32 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Exports"
         title="Attendance reports"
-        description="Daily, late, absent, early departure and overtime views. Raw punches remain in a separate table."
+        description="Daily, weekly, monthly, employee, department, late, absent, hours, and leave reports. Filter and export."
         actions={
           <>
-            <a href={`/api/reports/export?format=csv&from=${from}&to=${to}`}>
+            <a href={`/api/reports/export?format=csv&${query()}`}>
               <Button variant="outline">CSV</Button>
             </a>
-            <a href={`/api/reports/export?format=xlsx&from=${from}&to=${to}`}>
+            <a href={`/api/reports/export?format=xlsx&${query()}`}>
               <Button variant="outline">Excel</Button>
             </a>
-            <a href={`/api/reports/export?format=pdf&from=${from}&to=${to}`}>
+            <a href={`/api/reports/export?format=pdf&${query()}`}>
               <Button variant="outline">PDF</Button>
             </a>
           </>
         }
       />
-      <div className="mb-4 flex gap-3">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div>
+          <Label>Report</Label>
+          <Select value={type} onChange={(e) => setType(e.target.value)}>
+            {types.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </Select>
+        </div>
         <div>
           <Label>From</Label>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -63,41 +137,70 @@ export default function ReportsPage() {
           <Label>To</Label>
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        <Button className="self-end" onClick={() => void load()}>
-          Refresh
-        </Button>
+        <div>
+          <Label>Search</Label>
+          <Input placeholder="Name or ID" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div>
+          <Label>Employee</Label>
+          <Select className="min-w-40" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            <option value="">All</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Department</Label>
+          <Select className="min-w-40" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            <option value="">All</option>
+            {departments.map((dep) => (
+              <option key={dep.id} value={dep.id}>
+                {dep.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Status</Label>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All</option>
+            {["PRESENT", "LATE", "ABSENT", "EARLY_LEAVE", "HALF_DAY", "LEAVE", "HOLIDAY", "WEEKEND", "OVERTIME"].map(
+              (value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ),
+            )}
+          </Select>
+        </div>
+        <Button onClick={() => void load()}>Apply</Button>
       </div>
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-paper text-left text-xs uppercase text-muted">
               <tr>
-                <th className="px-5 py-3">Date</th>
-                <th className="px-5 py-3">Employee</th>
-                <th className="px-5 py-3">In / Out</th>
-                <th className="px-5 py-3">Late</th>
-                <th className="px-5 py-3">Early</th>
-                <th className="px-5 py-3">OT</th>
-                <th className="px-5 py-3">Status</th>
+                {(report?.columns ?? []).map((column) => (
+                  <th key={column} className="px-5 py-3">
+                    {column}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t border-line">
-                  <td className="px-5 py-3">{formatDate(row.workDate)}</td>
-                  <td className="px-5 py-3">
-                    {row.employee.name}
-                    <div className="text-xs text-muted">{row.employee.department?.name}</div>
-                  </td>
-                  <td className="px-5 py-3 font-mono">
-                    {formatTime(row.checkInAt)} / {formatTime(row.checkOutAt)}
-                  </td>
-                  <td className="px-5 py-3">{row.lateMinutes}</td>
-                  <td className="px-5 py-3">{row.earlyMinutes}</td>
-                  <td className="px-5 py-3">{row.overtimeMinutes}</td>
-                  <td className="px-5 py-3">
-                    <Badge tone={statusTone(row.status)}>{row.status}</Badge>
-                  </td>
+              {(report?.rows ?? []).map((row) => (
+                <tr key={String(row.id)} className="border-t border-line">
+                  {(report?.columns ?? []).map((column) => {
+                    const value = cell(row, column);
+                    return (
+                      <td key={column} className="px-5 py-3">
+                        {column === "Status" ? <Badge tone={statusTone(value)}>{value}</Badge> : value}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

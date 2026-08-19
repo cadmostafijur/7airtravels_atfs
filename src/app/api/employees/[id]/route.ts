@@ -14,6 +14,7 @@ const schema = z.object({
   designation: z.string().nullable().optional(),
   deviceUserId: z.string().min(1).optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  joinedAt: z.string().optional(),
 });
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -43,9 +44,14 @@ export async function PUT(request: Request, context: Ctx) {
     const admin = await requireApiSession(request, "employees.write");
     const { id } = await context.params;
     const body = schema.parse(await readJson(request));
+    const { joinedAt, email, ...rest } = body;
     const employee = await prisma.employee.update({
       where: { id },
-      data: { ...body, email: body.email || null },
+      data: {
+        ...rest,
+        email: email || null,
+        joinedAt: joinedAt ? new Date(joinedAt) : undefined,
+      },
     });
     await writeAudit({
       adminId: admin.id,

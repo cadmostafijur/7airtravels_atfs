@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDate, formatTime } from "@/lib/time";
+import { formatHours } from "@/lib/hours";
 
 type Row = {
   id: string;
@@ -19,11 +20,13 @@ type Row = {
   lateMinutes: number;
   earlyMinutes: number;
   overtimeMinutes: number;
+  workedMinutes: number;
   notes: string | null;
   employee: { id: string; name: string; employeeCode: string; department: { name: string } | null };
 };
 
 type Employee = { id: string; name: string; employeeCode: string };
+type Dept = { id: string; name: string };
 type Me = { role: string };
 
 const statuses = [
@@ -48,10 +51,14 @@ function toLocalInput(iso: string | null) {
 export default function AttendancePage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Dept[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [editing, setEditing] = useState<Row | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -71,16 +78,23 @@ export default function AttendancePage() {
   async function load() {
     const qs = new URLSearchParams({ from, to });
     if (status) qs.set("status", status);
+    if (q) qs.set("q", q);
+    if (employeeId) qs.set("employeeId", employeeId);
+    if (departmentId) qs.set("departmentId", departmentId);
     setRows(await api<Row[]>(`/api/attendance?${qs}`));
   }
 
   useEffect(() => {
-    void Promise.all([load(), api<Me>("/api/auth/me"), api<Employee[]>("/api/employees")]).then(
-      ([, user, emps]) => {
-        setMe(user);
-        setEmployees(emps);
-      },
-    );
+    void Promise.all([
+      load(),
+      api<Me>("/api/auth/me"),
+      api<Employee[]>("/api/employees"),
+      api<Dept[]>("/api/departments"),
+    ]).then(([, user, emps, deps]) => {
+      setMe(user);
+      setEmployees(emps);
+      setDepartments(deps);
+    });
   }, []);
 
   function openEdit(row: Row) {
@@ -195,6 +209,32 @@ export default function AttendancePage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <div>
+          <Label>Search</Label>
+          <Input placeholder="Name or employee ID" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div>
+          <Label>Employee</Label>
+          <Select className="min-w-40" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            <option value="">All</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Department</Label>
+          <Select className="min-w-40" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            <option value="">All</option>
+            {departments.map((dep) => (
+              <option key={dep.id} value={dep.id}>
+                {dep.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
           <Label>Status</Label>
           <Select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">All</option>
@@ -217,6 +257,9 @@ export default function AttendancePage() {
                 <th className="px-5 py-3">Department</th>
                 <th className="px-5 py-3">In</th>
                 <th className="px-5 py-3">Out</th>
+                <th className="px-5 py-3">Hours</th>
+                <th className="px-5 py-3">Late</th>
+                <th className="px-5 py-3">Early</th>
                 <th className="px-5 py-3">Status</th>
                 {canWrite ? <th className="px-5 py-3">Actions</th> : null}
               </tr>
@@ -232,6 +275,9 @@ export default function AttendancePage() {
                   <td className="px-5 py-3">{row.employee.department?.name ?? "—"}</td>
                   <td className="px-5 py-3 font-mono">{formatTime(row.checkInAt)}</td>
                   <td className="px-5 py-3 font-mono">{formatTime(row.checkOutAt)}</td>
+                  <td className="px-5 py-3 font-mono">{formatHours(row.workedMinutes)}</td>
+                  <td className="px-5 py-3">{row.lateMinutes}</td>
+                  <td className="px-5 py-3">{row.earlyMinutes}</td>
                   <td className="px-5 py-3">
                     <Badge tone={statusTone(row.status)}>{row.status}</Badge>
                   </td>

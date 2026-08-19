@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime, formatTime } from "@/lib/time";
+import { formatHours } from "@/lib/hours";
+
+type Dept = { id: string; name: string };
 
 type Employee = {
   id: string;
@@ -19,6 +22,8 @@ type Employee = {
   designation: string | null;
   deviceUserId: string;
   status: string;
+  joinedAt: string;
+  departmentId: string | null;
   department: { name: string } | null;
   summaries: Array<{
     id: string;
@@ -26,25 +31,49 @@ type Employee = {
     status: string;
     checkInAt: string | null;
     checkOutAt: string | null;
+    workedMinutes: number;
+    lateMinutes: number;
+    earlyMinutes: number;
+    overtimeMinutes: number;
   }>;
   attendances: Array<{ id: string; timestamp: string; verificationMethod: string; source: string }>;
+  leaves: Array<{ id: string; startDate: string; endDate: string; status: string; reason: string | null }>;
 };
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [employee, setEmployee] = useState<Employee | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [deviceUserId, setDeviceUserId] = useState("");
-  const [status, setStatus] = useState("ACTIVE");
+  const [departments, setDepartments] = useState<Dept[]>([]);
+  const [form, setForm] = useState({
+    employeeCode: "",
+    name: "",
+    phone: "",
+    email: "",
+    designation: "",
+    deviceUserId: "",
+    departmentId: "",
+    status: "ACTIVE",
+    joinedAt: "",
+  });
 
   async function load() {
-    const data = await api<Employee>(`/api/employees/${id}`);
+    const [data, deps] = await Promise.all([
+      api<Employee>(`/api/employees/${id}`),
+      api<Dept[]>("/api/departments"),
+    ]);
     setEmployee(data);
-    setName(data.name);
-    setPhone(data.phone ?? "");
-    setDeviceUserId(data.deviceUserId);
-    setStatus(data.status);
+    setDepartments(deps);
+    setForm({
+      employeeCode: data.employeeCode,
+      name: data.name,
+      phone: data.phone ?? "",
+      email: data.email ?? "",
+      designation: data.designation ?? "",
+      deviceUserId: data.deviceUserId,
+      departmentId: data.departmentId ?? "",
+      status: data.status,
+      joinedAt: data.joinedAt.slice(0, 10),
+    });
   }
 
   useEffect(() => {
@@ -55,7 +84,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     try {
       await api(`/api/employees/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ name, phone, deviceUserId, status }),
+        body: JSON.stringify({
+          ...form,
+          email: form.email || null,
+          departmentId: form.departmentId || null,
+        }),
       });
       toast.success("Saved");
       await load();
@@ -64,7 +97,20 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  async function deactivate() {
+    if (!window.confirm("Deactivate this employee? History is kept.")) return;
+    try {
+      await api(`/api/employees/${id}`, { method: "DELETE" });
+      toast.success("Deactivated");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed");
+    }
+  }
+
   if (!employee) return <p className="text-sm text-muted">Loading…</p>;
+
+  const exportHref = `/api/reports/export?format=csv&type=daily&employeeId=${id}&from=2020-01-01&to=${new Date().toISOString().slice(0, 10)}`;
 
   return (
     <div>
@@ -73,9 +119,16 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         title={employee.name}
         description={`${employee.department?.name ?? "No department"} · Device user ${employee.deviceUserId}`}
         actions={
-          <a className="text-sm font-semibold text-teal" href={`/api/reports/export?format=csv`}>
-            Export CSV
-          </a>
+          <>
+            <a className="text-sm font-semibold text-teal" href={exportHref}>
+              Export this employee
+            </a>
+            {employee.status === "ACTIVE" ? (
+              <Button variant="outline" onClick={deactivate}>
+                Deactivate
+              </Button>
+            ) : null}
+          </>
         }
       />
       <div className="grid gap-6 lg:grid-cols-2">
@@ -85,20 +138,47 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
+              <Label>Employee ID</Label>
+              <Input value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} />
+            </div>
+            <div>
               <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div>
               <Label>Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div>
+              <Label>Designation</Label>
+              <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+            </div>
+            <div>
+              <Label>Department</Label>
+              <Select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+                <option value="">Unassigned</option>
+                {departments.map((dep) => (
+                  <option key={dep.id} value={dep.id}>
+                    {dep.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Joining date</Label>
+              <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
             </div>
             <div>
               <Label>Device user ID</Label>
-              <Input value={deviceUserId} onChange={(e) => setDeviceUserId(e.target.value)} />
+              <Input value={form.deviceUserId} onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })} />
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="INACTIVE">INACTIVE</option>
               </Select>
@@ -119,12 +199,13 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 </span>
               </div>
             ))}
+            {!employee.attendances.length ? <p className="text-muted">No device punches yet.</p> : null}
           </CardContent>
         </Card>
       </div>
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Daily summaries</CardTitle>
+          <CardTitle>Attendance history</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
@@ -133,6 +214,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <th className="px-5 py-3">Date</th>
                 <th className="px-5 py-3">In</th>
                 <th className="px-5 py-3">Out</th>
+                <th className="px-5 py-3">Hours</th>
+                <th className="px-5 py-3">Late</th>
+                <th className="px-5 py-3">Early</th>
                 <th className="px-5 py-3">Status</th>
               </tr>
             </thead>
@@ -142,6 +226,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   <td className="px-5 py-3">{formatDate(row.workDate)}</td>
                   <td className="px-5 py-3 font-mono">{formatTime(row.checkInAt)}</td>
                   <td className="px-5 py-3 font-mono">{formatTime(row.checkOutAt)}</td>
+                  <td className="px-5 py-3 font-mono">{formatHours(row.workedMinutes)}</td>
+                  <td className="px-5 py-3">{row.lateMinutes}</td>
+                  <td className="px-5 py-3">{row.earlyMinutes}</td>
                   <td className="px-5 py-3">
                     <Badge tone={statusTone(row.status)}>{row.status}</Badge>
                   </td>
@@ -151,6 +238,23 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </table>
         </CardContent>
       </Card>
+      {employee.leaves.length ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Leave history</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-line p-0 text-sm">
+            {employee.leaves.map((row) => (
+              <div key={row.id} className="flex justify-between px-5 py-3">
+                <span>
+                  {formatDate(row.startDate)} → {formatDate(row.endDate)} · {row.reason}
+                </span>
+                <Badge tone={row.status === "APPROVED" ? "ok" : "muted"}>{row.status}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

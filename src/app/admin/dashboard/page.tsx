@@ -5,21 +5,26 @@ import { io } from "socket.io-client";
 import { toast } from "sonner";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, statusTone } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { api } from "@/lib/api";
 import { relativeTime } from "@/lib/utils";
 import { formatDateTime, formatTime as fmtTime } from "@/lib/time";
+import { formatHours } from "@/lib/hours";
 
 type Stats = {
+  month: string;
   totals: {
     present: number;
     late: number;
     absent: number;
     leave: number;
+    halfDay: number;
     checkedIn: number;
     checkedOut: number;
     employees: number;
+    todayHours: string;
+    monthHours: string;
   };
   device: {
     id: string;
@@ -31,6 +36,18 @@ type Stats = {
     port: number;
     totalSynced: number;
   } | null;
+  today: Array<{
+    id: string;
+    employee: string;
+    employeeCode: string;
+    department: string | null;
+    status: string;
+    checkInAt: string | null;
+    checkOutAt: string | null;
+    workedMinutes: number;
+    lateMinutes: number;
+    earlyMinutes: number;
+  }>;
   feed: Array<{
     id: string;
     employee: string;
@@ -41,6 +58,7 @@ type Stats = {
     deviceUserId: string;
   }>;
   trend: Array<{ date: string; present: number; late: number; absent: number }>;
+  monthly: Array<{ date: string; present: number; late: number; absent: number; hours: number }>;
 };
 
 function Stat({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
@@ -81,13 +99,13 @@ export default function DashboardPage() {
   const cards = useMemo(() => {
     const t = stats?.totals;
     return [
+      { label: "Total employees", value: t?.employees ?? "—" },
       { label: "Present", value: t?.present ?? "—" },
       { label: "Late", value: t?.late ?? "—" },
       { label: "Absent", value: t?.absent ?? "—" },
       { label: "Leave", value: t?.leave ?? "—" },
-      { label: "Checked in", value: t?.checkedIn ?? "—" },
-      { label: "Checked out", value: t?.checkedOut ?? "—" },
-      { label: "Employees", value: t?.employees ?? "—" },
+      { label: "Today hours", value: t?.todayHours ?? "—" },
+      { label: "Month hours", value: t?.monthHours ?? "—" },
     ];
   }, [stats]);
 
@@ -96,27 +114,33 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Live desk"
         title="Today's operations"
-        description="Attendance updates from the K50A synchronization worker. The board refreshes without a page reload."
+        description="Today's attendance summary, monthly overview, working hours, and live K50A punches."
       />
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         {cards.map((card) => (
           <Stat key={card.label} label={card.label} value={card.value} />
         ))}
       </div>
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <Stat label="Checked in" value={stats?.totals.checkedIn ?? "—"} hint="On site now" />
+        <Stat label="Checked out" value={stats?.totals.checkedOut ?? "—"} />
+        <Stat label="Half day" value={stats?.totals.halfDay ?? "—"} />
+      </div>
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Seven-day movement</CardTitle>
+            <CardTitle>Monthly attendance · {stats?.month ?? ""}</CardTitle>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats?.trend ?? []}>
+              <AreaChart data={stats?.monthly ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#d7e1e3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Area type="monotone" dataKey="present" stroke="#0e8a96" fill="#0e8a96" fillOpacity={0.15} />
                 <Area type="monotone" dataKey="late" stroke="#d61f26" fill="#d61f26" fillOpacity={0.12} />
+                <Area type="monotone" dataKey="absent" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.1} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -147,30 +171,69 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Live attendance feed</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y divide-line">
-            {(stats?.feed ?? []).map((row) => (
-              <div key={row.id} className="flex items-center justify-between py-3">
-                <div>
-                  <div className="font-medium">{row.employee}</div>
-                  <div className="text-xs text-muted">
-                    {row.employeeCode ?? `UID ${row.deviceUserId}`} · {row.device} · {row.verificationMethod}
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Today's attendance</CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-paper text-left text-xs uppercase text-muted">
+                <tr>
+                  <th className="px-5 py-3">Employee</th>
+                  <th className="px-5 py-3">In</th>
+                  <th className="px-5 py-3">Out</th>
+                  <th className="px-5 py-3">Hours</th>
+                  <th className="px-5 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats?.today ?? []).map((row) => (
+                  <tr key={row.id} className="border-t border-line">
+                    <td className="px-5 py-3">
+                      <div className="font-medium">{row.employee}</div>
+                      <div className="text-xs text-muted">
+                        {row.employeeCode} · {row.department ?? "—"}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 font-mono">{fmtTime(row.checkInAt)}</td>
+                    <td className="px-5 py-3 font-mono">{fmtTime(row.checkOutAt)}</td>
+                    <td className="px-5 py-3 font-mono">{formatHours(row.workedMinutes)}</td>
+                    <td className="px-5 py-3">
+                      <Badge tone={statusTone(row.status)}>{row.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!stats?.today?.length ? <p className="p-6 text-center text-sm text-muted">No daily register yet today.</p> : null}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-line">
+              {(stats?.feed ?? []).map((row) => (
+                <div key={row.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <div className="font-medium">{row.employee}</div>
+                    <div className="text-xs text-muted">
+                      {row.employeeCode ?? `UID ${row.deviceUserId}`} · {row.device}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-sm">{fmtTime(row.timestamp)}</div>
+                    <div className="text-xs text-muted">{formatDateTime(row.timestamp)}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono text-sm">{fmtTime(row.timestamp)}</div>
-                  <div className="text-xs text-muted">{formatDateTime(row.timestamp)}</div>
-                </div>
-              </div>
-            ))}
-            {!stats?.feed?.length ? <p className="py-8 text-center text-sm text-muted">No scans yet today.</p> : null}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+              {!stats?.feed?.length ? <p className="py-8 text-center text-sm text-muted">No scans yet today.</p> : null}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
