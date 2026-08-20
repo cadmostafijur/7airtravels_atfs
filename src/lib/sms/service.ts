@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { createSmsProvider } from "@/lib/sms/provider";
+import { normalizeBdPhone } from "@/lib/sms/phone";
 import { env } from "@/lib/env";
 import { formatDate, formatTime } from "@/lib/time";
 import { logger } from "@/lib/logger";
@@ -14,7 +15,8 @@ function phonesFrom(settings: {
 }): string[] {
   return [settings.adminPhone1, settings.adminPhone2, settings.adminPhone3]
     .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeBdPhone);
 }
 
 function buildMessage(
@@ -118,12 +120,13 @@ export async function notifyAttendanceSms(
 
 export async function sendTestSms(phone: string) {
   const provider = createSmsProvider();
+  const recipient = normalizeBdPhone(phone);
   const message = "7 Air Travels ATFS test message. SMS gateway is reachable.";
-  const result = await provider.sendSms(phone, message);
+  const result = await provider.sendSms(recipient, message);
   await prisma.smsLog.create({
     data: {
-      notificationKey: `test:${phone}:${Date.now()}`,
-      recipient: phone,
+      notificationKey: `test:${recipient}:${Date.now()}`,
+      recipient,
       message,
       eventType: "TEST",
       status: result.success ? "SENT" : "FAILED",

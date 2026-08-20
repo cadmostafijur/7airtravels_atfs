@@ -69,8 +69,14 @@ export default function SmsPage() {
       <PageHeader
         eyebrow="Alerts"
         title="Administrator SMS"
-        description="Exactly three administrator numbers. Duplicate punches never resend a successful SMS. SMS failure never blocks attendance storage."
+        description="BulkSMSBD gateway. Enable SMS, set 3 admin numbers (017… or 88017…), then Test. Attendance SMS never blocks saving punches."
       />
+      <Card className="mb-4 border-teal/30 bg-teal/5">
+        <CardContent className="p-4 text-sm text-muted">
+          Provider: <strong>BulkSMSBD</strong> · Sender ID from env · Success code <code>202</code>. After Vercel deploy, set the
+          same SMS_* variables in Vercel Environment Variables.
+        </CardContent>
+      </Card>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>

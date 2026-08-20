@@ -352,15 +352,27 @@ SMS (৩ অ্যাডমিন নম্বর, SMS মেনুতে Enable
 
 ---
 
-# অংশ ৭: SMS (৩ অ্যাডমিন)
+# অংশ ৭: SMS (৩ অ্যাডমিন) — BulkSMSBD
 
 1. **Admin SMS** মেনু  
 2. Enable SMS notifications ✓  
-3. Admin SMS Number 1, 2, 3  
+3. Admin SMS Number 1, 2, 3 (যেমন `017XXXXXXXX` বা `88017XXXXXXXX`)  
 4. Save  
-5. Test SMS দিয়ে গেটওয়ে চেক  
+5. **Test** দিয়ে গেটওয়ে চেক  
 
-`.env`-এ `SMS_PROVIDER=http` ও API credentials production-এ দিন।  
+`.env` / Vercel:
+
+```env
+SMS_PROVIDER=bulksmsbd
+SMS_API_URL=http://bulksmsbd.net/api/smsapi
+SMS_API_KEY=your-api-key
+SMS_SENDER_ID=8809648910591
+SMS_TYPE=text
+SMS_API_METHOD=GET
+```
+
+সফল হলে API response code **202**। Balance কম হলে `1007` আসবে।  
+IP whitelist চাইলে BulkSMSBD dashboard থেকে Vercel/Worker IP allow করুন (`1032`).  
 
 ---
 

@@ -41,6 +41,7 @@ export const env = {
     apiUrl: process.env.SMS_API_URL ?? "",
     apiKey: process.env.SMS_API_KEY ?? "",
     senderId: process.env.SMS_SENDER_ID ?? "7AIR",
+    type: process.env.SMS_TYPE ?? "text",
     method: (process.env.SMS_API_METHOD ?? "POST").toUpperCase(),
     bodyTemplate: process.env.SMS_HTTP_BODY_TEMPLATE ?? "",
     phoneParam: process.env.SMS_HTTP_PHONE_PARAM ?? "number",
