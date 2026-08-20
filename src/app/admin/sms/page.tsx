@@ -72,9 +72,14 @@ export default function SmsPage() {
         description="BulkSMSBD gateway. Enable SMS, set 3 admin numbers (017… or 88017…), then Test. Attendance SMS never blocks saving punches."
       />
       <Card className="mb-4 border-teal/30 bg-teal/5">
-        <CardContent className="p-4 text-sm text-muted">
-          Provider: <strong>BulkSMSBD</strong> · Sender ID from env · Success code <code>202</code>. After Vercel deploy, set the
-          same SMS_* variables in Vercel Environment Variables.
+        <CardContent className="space-y-2 p-4 text-sm text-muted">
+          <p>
+            Provider: <strong>BulkSMSBD</strong> · Sender ID from env · Success code <code>202</code>.
+          </p>
+          <p>
+            If test fails with code <strong>1032</strong>, whitelist your PC/server IP in BulkSMSBD → Phone Book / IP
+            whitelist, then try again. For Vercel, whitelist Vercel egress IPs or run SMS from the office Worker.
+          </p>
         </CardContent>
       </Card>
       <div className="grid gap-6 lg:grid-cols-2">
@@ -136,6 +141,9 @@ export default function SmsPage() {
                   <Badge tone={log.status === "SENT" ? "ok" : "late"}>{log.status}</Badge>
                 </div>
                 <div className="text-muted">{log.message}</div>
+                {log.providerResponse ? (
+                  <div className="mt-1 break-all font-mono text-xs text-signal">{log.providerResponse}</div>
+                ) : null}
                 <div className="font-mono text-xs text-muted">{formatDateTime(log.createdAt)}</div>
               </div>
             ))}
