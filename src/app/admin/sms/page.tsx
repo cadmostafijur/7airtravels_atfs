@@ -54,8 +54,34 @@ export default function SmsPage() {
 
   async function test() {
     try {
-      await api("/api/sms/test", { method: "POST", body: JSON.stringify({ phone: testPhone }) });
-      toast.success("Test SMS attempted");
+      const result = await api<{ success: boolean; response?: string }>("/api/sms/test", {
+        method: "POST",
+        body: JSON.stringify({ phone: testPhone }),
+      });
+      if (result.success) toast.success("Test SMS sent (code 202)");
+      else toast.error(result.response?.slice(0, 180) || "Test SMS failed");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed");
+    }
+  }
+
+  async function deleteLog(id: string) {
+    if (!window.confirm("Delete this SMS log entry?")) return;
+    try {
+      await api(`/api/sms/logs/${id}`, { method: "DELETE" });
+      toast.success("SMS log deleted");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed");
+    }
+  }
+
+  async function clearLogs() {
+    if (!window.confirm("Delete all SMS logs? This cannot be undone.")) return;
+    try {
+      const result = await api<{ deletedCount: number }>("/api/sms/logs", { method: "DELETE" });
+      toast.success(`Deleted ${result.deletedCount} SMS log(s)`);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed");
@@ -130,15 +156,26 @@ export default function SmsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle>SMS log</CardTitle>
+            {logs.length > 0 ? (
+              <Button size="sm" variant="outline" onClick={() => void clearLogs()}>
+                Clear all
+              </Button>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
+            {logs.length === 0 ? <p className="text-muted">No SMS logs yet.</p> : null}
             {logs.map((log) => (
               <div key={log.id} className="rounded-lg border border-line p-3">
-                <div className="flex justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <span className="font-medium">{log.recipient}</span>
-                  <Badge tone={log.status === "SENT" ? "ok" : "late"}>{log.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={log.status === "SENT" ? "ok" : "late"}>{log.status}</Badge>
+                    <Button size="sm" variant="outline" onClick={() => void deleteLog(log.id)}>
+                      Delete
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-muted">{log.message}</div>
                 {log.providerResponse ? (
