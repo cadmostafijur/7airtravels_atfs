@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/time";
@@ -44,6 +45,7 @@ export default function EmployeesPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [status, setStatus] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   async function load() {
     const qs = new URLSearchParams();
@@ -76,19 +78,27 @@ export default function EmployeesPage() {
     }
   }
 
-  async function deactivate(id: string, name: string) {
-    if (!window.confirm(`Deactivate ${name}? Attendance history is kept.`)) return;
-    try {
-      await api(`/api/employees/${id}`, { method: "DELETE" });
-      toast.success("Employee deactivated");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    }
+  function askDeactivate(id: string, name: string) {
+    setConfirm({
+      title: `Deactivate ${name}?`,
+      description: "The employee becomes inactive. Attendance history is kept.",
+      confirmLabel: "Deactivate",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/employees/${id}`, { method: "DELETE" });
+          toast.success("Employee deactivated");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
   }
 
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Admin · Employee records"
         title="Employees"
@@ -179,7 +189,7 @@ export default function EmployeesPage() {
                     </td>
                     <td className="px-5 py-3">
                       {row.status === "ACTIVE" ? (
-                        <Button size="sm" variant="outline" onClick={() => deactivate(row.id, row.name)}>
+                        <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
                           Deactivate
                         </Button>
                       ) : null}

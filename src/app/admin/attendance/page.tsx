@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDate, formatTime } from "@/lib/time";
@@ -72,6 +73,7 @@ export default function AttendancePage() {
     earlyMinutes: 0,
     overtimeMinutes: 0,
   });
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   const canWrite = me?.role === "SUPER_ADMIN" || me?.role === "ADMIN";
 
@@ -159,19 +161,27 @@ export default function AttendancePage() {
     }
   }
 
-  async function remove(id: string, name: string) {
-    if (!window.confirm(`Delete daily register for ${name}? Raw fingerprint punches are not deleted.`)) return;
-    try {
-      await api(`/api/attendance/summary/${id}`, { method: "DELETE" });
-      toast.success("Entry deleted");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    }
+  function askRemove(id: string, name: string) {
+    setConfirm({
+      title: `Delete daily register for ${name}?`,
+      description: "This removes the daily summary only. Raw fingerprint punches are not deleted.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/attendance/summary/${id}`, { method: "DELETE" });
+          toast.success("Entry deleted");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
   }
 
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Processed attendance"
         title="Daily register"
@@ -287,7 +297,7 @@ export default function AttendancePage() {
                         <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
                           Edit
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => remove(row.id, row.employee.name)}>
+                        <Button size="sm" variant="danger" onClick={() => askRemove(row.id, row.employee.name)}>
                           Delete
                         </Button>
                       </div>

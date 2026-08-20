@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime, formatTime } from "@/lib/time";
@@ -55,6 +56,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     status: "ACTIVE",
     joinedAt: "",
   });
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   async function load() {
     const [data, deps] = await Promise.all([
@@ -97,15 +99,22 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
-  async function deactivate() {
-    if (!window.confirm("Deactivate this employee? History is kept.")) return;
-    try {
-      await api(`/api/employees/${id}`, { method: "DELETE" });
-      toast.success("Deactivated");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    }
+  function askDeactivate() {
+    setConfirm({
+      title: "Deactivate this employee?",
+      description: "The employee becomes inactive. Attendance history is kept.",
+      confirmLabel: "Deactivate",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/employees/${id}`, { method: "DELETE" });
+          toast.success("Deactivated");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
   }
 
   if (!employee) return <p className="text-sm text-muted">Loading…</p>;
@@ -114,6 +123,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow={employee.employeeCode}
         title={employee.name}
@@ -124,7 +134,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               Export this employee
             </a>
             {employee.status === "ACTIVE" ? (
-              <Button variant="outline" onClick={deactivate}>
+              <Button variant="outline" onClick={askDeactivate}>
                 Deactivate
               </Button>
             ) : null}

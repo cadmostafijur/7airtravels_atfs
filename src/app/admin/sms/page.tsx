@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/time";
@@ -32,6 +33,7 @@ export default function SmsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<Log[]>([]);
   const [testPhone, setTestPhone] = useState("");
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   async function load() {
     const [s, l] = await Promise.all([api<Settings>("/api/sms/settings"), api<Log[]>("/api/sms/logs")]);
@@ -66,32 +68,47 @@ export default function SmsPage() {
     }
   }
 
-  async function deleteLog(id: string) {
-    if (!window.confirm("Delete this SMS log entry?")) return;
-    try {
-      await api(`/api/sms/logs/${id}`, { method: "DELETE" });
-      toast.success("SMS log deleted");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    }
+  function askDeleteLog(id: string) {
+    setConfirm({
+      title: "Delete SMS log?",
+      description: "This removes the log entry from the admin console. It does not recall an SMS already delivered.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/sms/logs/${id}`, { method: "DELETE" });
+          toast.success("SMS log deleted");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
   }
 
-  async function clearLogs() {
-    if (!window.confirm("Delete all SMS logs? This cannot be undone.")) return;
-    try {
-      const result = await api<{ deletedCount: number }>("/api/sms/logs", { method: "DELETE" });
-      toast.success(`Deleted ${result.deletedCount} SMS log(s)`);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    }
+  function askClearLogs() {
+    setConfirm({
+      title: "Clear all SMS logs?",
+      description: "This permanently deletes every SMS log entry. This cannot be undone.",
+      confirmLabel: "Clear all",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const result = await api<{ deletedCount: number }>("/api/sms/logs", { method: "DELETE" });
+          toast.success(`Deleted ${result.deletedCount} SMS log(s)`);
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
   }
 
   if (!settings) return <p className="text-sm text-muted">Loading…</p>;
 
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Alerts"
         title="Administrator SMS"
@@ -159,7 +176,7 @@ export default function SmsPage() {
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle>SMS log</CardTitle>
             {logs.length > 0 ? (
-              <Button size="sm" variant="outline" onClick={() => void clearLogs()}>
+              <Button size="sm" variant="outline" onClick={() => askClearLogs()}>
                 Clear all
               </Button>
             ) : null}
@@ -172,7 +189,7 @@ export default function SmsPage() {
                   <span className="font-medium">{log.recipient}</span>
                   <div className="flex items-center gap-2">
                     <Badge tone={log.status === "SENT" ? "ok" : "late"}>{log.status}</Badge>
-                    <Button size="sm" variant="outline" onClick={() => void deleteLog(log.id)}>
+                    <Button size="sm" variant="outline" onClick={() => askDeleteLog(log.id)}>
                       Delete
                     </Button>
                   </div>
