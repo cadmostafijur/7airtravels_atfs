@@ -5,6 +5,7 @@ import { createDeviceAdapter } from "@/lib/devices/factory";
 import { probeTcp } from "@/lib/devices/tcp-probe";
 import type { DeviceAdapter, DeviceAttendanceLog, DeviceInfo, DeviceUser } from "@/lib/devices/types";
 import { publicErrorMessage } from "@/lib/errors";
+import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
 import { logger } from "@/lib/logger";
 import type { Device, Prisma } from "@prisma/client";
 
@@ -24,13 +25,29 @@ export async function withDevice<T>(
   device: Device,
   fn: (adapter: DeviceAdapter) => Promise<T>,
 ): Promise<T> {
+  const timeoutMs = Math.max(device.timeoutMs || 0, 60_000);
+  if (device.timeoutMs < 60_000) {
+    device = await prisma.device.update({
+      where: { id: device.id },
+      data: { timeoutMs: 60_000 },
+    });
+  }
   const adapter = createDeviceAdapter(device.adapterType, {
     ipAddress: device.ipAddress,
     port: device.port,
-    timeoutMs: device.timeoutMs,
+    timeoutMs,
     commKey: device.commKey,
   });
-  await adapter.connect();
+  try {
+    await adapter.connect();
+  } catch (error) {
+    const message = extractDeviceErrorMessage(error, publicErrorMessage(error));
+    await prisma.device.update({
+      where: { id: device.id },
+      data: { status: "OFFLINE", lastError: message },
+    });
+    throw error;
+  }
   try {
     await prisma.device.update({
       where: { id: device.id },

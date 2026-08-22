@@ -11,7 +11,7 @@ const schema = z.object({
   ipAddress: z.string().min(7),
   port: z.number().int().min(1).max(65535),
   location: z.string().optional(),
-  timeoutMs: z.number().int().min(1000).max(60000).optional(),
+  timeoutMs: z.number().int().min(1000).max(120000).optional(),
   commKey: z.number().int().optional(),
 });
 
@@ -29,7 +29,12 @@ export async function POST(request: Request) {
   try {
     const admin = await requireApiSession(request, "devices");
     const body = schema.parse(await readJson(request));
-    const device = await prisma.device.create({ data: body });
+    const device = await prisma.device.create({
+      data: {
+        ...body,
+        timeoutMs: body.timeoutMs ?? 60000,
+      },
+    });
     await writeAudit({
       adminId: admin.id,
       action: "DEVICE_CREATE",

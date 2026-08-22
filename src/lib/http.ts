@@ -11,7 +11,8 @@ export function jsonError(error: unknown, fallbackStatus = 500) {
   const message = publicErrorMessage(error);
   if (!(error instanceof AppError) || status >= 500) {
     logger.error("api_error", {
-      message: error instanceof Error ? error.message : String(error),
+      detail: error instanceof Error ? error.message : publicErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
   }
   return NextResponse.json(

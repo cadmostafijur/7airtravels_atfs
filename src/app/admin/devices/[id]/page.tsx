@@ -78,10 +78,24 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
         body: body ? JSON.stringify(body) : "{}",
       });
       setResult(data);
-      toast.success(action);
+      if (action === "Sync now") {
+        const sync = data as {
+          recordsRead?: number;
+          recordsInserted?: number;
+          status?: string;
+        };
+        toast.success(
+          `Sync ${sync.status ?? "done"} · read ${sync.recordsRead ?? 0} · inserted ${sync.recordsInserted ?? 0}`,
+        );
+      } else {
+        toast.success(action);
+      }
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : action);
+      const message = error instanceof Error ? error.message : action;
+      toast.error(message);
+      setResult({ error: message });
+      await load();
     } finally {
       setBusy(null);
     }

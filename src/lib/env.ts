@@ -32,7 +32,7 @@ export const env = {
   k50a: {
     ip: process.env.K50A_IP ?? "192.168.1.201",
     port: Number(process.env.K50A_PORT ?? 4370),
-    timeoutMs: Number(process.env.K50A_TIMEOUT_MS ?? 10000),
+    timeoutMs: Number(process.env.K50A_TIMEOUT_MS ?? 60000),
     commKey: Number(process.env.K50A_COMM_KEY ?? 0),
     location: process.env.K50A_LOCATION ?? "Main Office",
   },

@@ -12,7 +12,7 @@ const schema = z.object({
   ipAddress: z.string().min(7).optional(),
   port: z.number().int().min(1).max(65535).optional(),
   location: z.string().nullable().optional(),
-  timeoutMs: z.number().int().min(1000).max(60000).optional(),
+  timeoutMs: z.number().int().min(1000).max(120000).optional(),
   commKey: z.number().int().optional(),
 });
 

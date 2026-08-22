@@ -1,13 +1,15 @@
 import "server-only";
 
 import type { Attendance, AttendanceSource, Device, Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, withPrisma } from "@/lib/prisma";
 import { withDevice } from "@/lib/devices/diagnostics";
 import type { DeviceAttendanceLog } from "@/lib/devices/types";
 import { processDailySummary } from "@/lib/attendance/process";
 import { notifyAttendanceSms } from "@/lib/sms/service";
 import { publishAttendance } from "@/lib/realtime/publisher";
 import { logger } from "@/lib/logger";
+import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
+import { DeviceError, publicErrorMessage } from "@/lib/errors";
 
 export type IngestResult = {
   inserted: Attendance | null;
@@ -74,10 +76,11 @@ export async function ingestAttendanceLog(input: {
 }
 
 export async function syncDeviceAttendance(deviceId: string) {
-  const device = await prisma.device.findUnique({ where: { id: deviceId } });
+  return withPrisma(async (db) => {
+  const device = await db.device.findUnique({ where: { id: deviceId } });
   if (!device) throw new Error("Device not found");
 
-  const syncLog = await prisma.syncLog.create({
+  const syncLog = await db.syncLog.create({
     data: { deviceId, status: "RUNNING" },
   });
 
@@ -101,7 +104,7 @@ export async function syncDeviceAttendance(deviceId: string) {
     }
 
     const status = recordsFailed > 0 ? "PARTIAL" : "SUCCESS";
-    await prisma.syncLog.update({
+    await db.syncLog.update({
       where: { id: syncLog.id },
       data: {
         status,
@@ -112,19 +115,19 @@ export async function syncDeviceAttendance(deviceId: string) {
         recordsFailed,
       },
     });
-    await prisma.device.update({
+    await db.device.update({
       where: { id: device.id },
       data: {
         lastSyncAt: new Date(),
         totalSynced: { increment: recordsInserted },
         status: "ONLINE",
-        lastError: null,
+        lastError: recordsRead === 0 ? "Sync OK — no new punches on device (or empty log buffer)." : null,
       },
     });
     return { recordsRead, recordsInserted, recordsSkipped, recordsFailed, status };
   } catch (error) {
-    errorMessage = error instanceof Error ? error.message : "Sync failed";
-    await prisma.syncLog.update({
+    errorMessage = extractDeviceErrorMessage(error, publicErrorMessage(error));
+    await db.syncLog.update({
       where: { id: syncLog.id },
       data: {
         status: "FAILED",
@@ -136,10 +139,11 @@ export async function syncDeviceAttendance(deviceId: string) {
         errorMessage,
       },
     });
-    await prisma.device.update({
+    await db.device.update({
       where: { id: device.id },
       data: { status: "OFFLINE", lastError: errorMessage },
     });
-    throw error;
+    throw new DeviceError(errorMessage, extractDeviceErrorMessage(error));
   }
+  });
 }
