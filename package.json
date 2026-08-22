@@ -11,6 +11,8 @@
     "patch:zklib": "node scripts/patch-node-zklib.js",
     "start": "next start",
     "start:worker": "tsx --require ./scripts/stub-server-only.cjs src/server/worker.ts",
+    "worker:autostart": "powershell -ExecutionPolicy Bypass -File scripts/install-worker-autostart.ps1",
+    "worker:autostart:remove": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-worker-autostart.ps1",
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

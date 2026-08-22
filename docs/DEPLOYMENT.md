@@ -57,6 +57,49 @@ pm2 start npm --name atfs-worker -- run start:worker
 pm2 save
 ```
 
+## Always-on office worker (required)
+
+The K50A is on the **office LAN**. Vercel (cloud) cannot reach it. Something in the office must run the sync worker 24/7.
+
+**This is normal for biometric devices** — not a Vercel bug.
+
+### Recommended setup
+
+| Piece | Where | Client sees it? |
+| --- | --- | --- |
+| Admin website | **Vercel** | Yes — normal `https://…` URL |
+| Neon database | Cloud | No |
+| Sync + SMS worker | **Office PC** (background) | No — starts at Windows login |
+
+### Install worker so nobody opens a terminal
+
+On the office PC (same Wi‑Fi/LAN as K50A), once:
+
+```bash
+npm ci
+npm run worker:autostart
+```
+
+That registers a Windows Scheduled Task (`7AirTravels-ATFS-Worker`) which:
+
+- Starts when someone logs into Windows
+- Restarts on failure
+- Runs hidden in the background
+
+Keep that PC **powered on** (or wake it each morning). Remove with:
+
+```bash
+npm run worker:autostart:remove
+```
+
+### Manual (testing only)
+
+```bash
+npm run start:worker
+```
+
+If you close that window, fingerprint → SMS stops until the worker runs again.
+
 ## HTTPS
 
 Terminate TLS at nginx or Caddy. Forward:
