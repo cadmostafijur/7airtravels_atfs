@@ -40,6 +40,17 @@ type Device = {
   }>;
 };
 
+type WebsitePunch = {
+  id: string;
+  when: string;
+  deviceUserId: string;
+  type: string;
+  employee: string | null;
+  employeeCode: string | null;
+  mapped: boolean;
+  source: string;
+};
+
 export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -49,12 +60,24 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<unknown>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [websitePunches, setWebsitePunches] = useState<WebsitePunch[]>([]);
+  const [websiteTotal, setWebsiteTotal] = useState(0);
+
+  async function loadPunches() {
+    const data = await api<{ punches: WebsitePunch[]; totalOnWebsite: number }>(`/api/devices/${id}/punches`);
+    setWebsitePunches(data.punches);
+    setWebsiteTotal(data.totalOnWebsite);
+  }
 
   async function load() {
     const data = await api<Device>(`/api/devices/${id}`);
     setDevice(data);
     setIp(data.ipAddress);
     setPort(data.port);
+    await loadPunches().catch(() => {
+      setWebsitePunches([]);
+      setWebsiteTotal(0);
+    });
   }
 
   useEffect(() => {
@@ -82,11 +105,18 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
         const sync = data as {
           recordsRead?: number;
           recordsInserted?: number;
+          recordsSkipped?: number;
           status?: string;
         };
         toast.success(
-          `Sync ${sync.status ?? "done"} · read ${sync.recordsRead ?? 0} · inserted ${sync.recordsInserted ?? 0}`,
+          `Sync ${sync.status ?? "done"} · read ${sync.recordsRead ?? 0} · inserted ${sync.recordsInserted ?? 0} · skipped ${sync.recordsSkipped ?? 0}`,
         );
+        if ((sync.recordsInserted ?? 0) === 0 && (sync.recordsSkipped ?? 0) > 0) {
+          toast.message("Those punches were already on the website. Clear website punches to re-import.");
+        }
+      } else if (action === "Read punches") {
+        const read = data as { count?: number };
+        toast.success(`Device has ${read.count ?? 0} punch(es). Click Sync now to save them on the website.`);
       } else {
         toast.success(action);
       }
@@ -120,6 +150,53 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
     });
   }
 
+  function askClearWebsite() {
+    setConfirm({
+      title: "Clear all website punches?",
+      description:
+        "Deletes every punch, daily register row, and SMS log on the website so you can Sync again. The K50A device itself is NOT cleared.",
+      confirmLabel: "Clear website data",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const data = await api<{ deleted: { punches: number; summaries: number; smsLogs: number } }>(
+            "/api/attendance/clear-website",
+            { method: "POST", body: "{}" },
+          );
+          toast.success(
+            `Cleared ${data.deleted.punches} punches · ${data.deleted.summaries} summaries · ${data.deleted.smsLogs} SMS logs`,
+          );
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Clear failed");
+        }
+      },
+    });
+  }
+
+  function askClearDevice() {
+    setConfirm({
+      title: "Clear punches ON the K50A device?",
+      description:
+        "This wipes attendance logs stored inside the physical fingerprint device. Website records stay until you also Clear website punches. This cannot be undone on the device.",
+      confirmLabel: "Clear device logs",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/devices/${id}/clear`, {
+            method: "POST",
+            body: JSON.stringify({ confirm: "DELETE_DEVICE_ATTENDANCE" }),
+          });
+          toast.success("K50A device attendance logs cleared");
+          setResult({ clearedOnDevice: true });
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Device clear failed");
+        }
+      },
+    });
+  }
+
   if (!device) return <p className="text-sm text-muted">Loading device…</p>;
 
   return (
@@ -128,16 +205,38 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
       <PageHeader
         eyebrow="Hardware diagnostic"
         title={device.name}
-        description="Phase 1 connectivity test: TCP probe first, then ZK protocol handshake. The K50A adapter is isolated and replaceable."
+        description="Read punches = live list from K50A only. Sync now = save that list onto the website (attendance + SMS)."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge tone={device.status === "ONLINE" ? "ok" : "muted"}>{device.status}</Badge>
+            <Button variant="outline" size="sm" onClick={askClearWebsite}>
+              Clear website punches
+            </Button>
+            <Button variant="danger" size="sm" onClick={askClearDevice}>
+              Clear device punches
+            </Button>
             <Button variant="danger" size="sm" onClick={askDelete}>
               Delete device
             </Button>
           </div>
         }
       />
+      <Card className="mb-4 border-teal/30 bg-teal/5">
+        <CardContent className="space-y-1 p-4 text-sm text-muted">
+          <p>
+            <strong className="text-ink">1. Read punches</strong> — see what is on the device (not saved yet).
+          </p>
+          <p>
+            <strong className="text-ink">2. Sync now</strong> — import into Daily register / Dashboard / SMS.
+          </p>
+          <p>
+            <strong className="text-ink">Clear website punches</strong> — wipe Neon DB only.
+          </p>
+          <p>
+            <strong className="text-ink">Clear device punches</strong> — wipe logs inside the physical K50A (SUPER_ADMIN).
+          </p>
+        </CardContent>
+      </Card>
       <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-1">
           <CardHeader>
@@ -152,28 +251,28 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
               <Label>TCP port</Label>
               <Input type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} />
             </div>
-            <Button variant="outline" onClick={saveNetwork}>
+            <Button variant="outline" onClick={() => void saveNetwork()}>
               Save IP / port
             </Button>
             <div className="grid grid-cols-2 gap-2 pt-2">
-              <Button disabled={!!busy} onClick={() => run("Test connection", `/api/devices/${id}/test`)}>
+              <Button disabled={!!busy} onClick={() => void run("Test connection", `/api/devices/${id}/test`)}>
                 Test connection
               </Button>
-              <Button variant="navy" disabled={!!busy} onClick={() => run("Sync now", `/api/devices/${id}/sync`)}>
+              <Button variant="navy" disabled={!!busy} onClick={() => void run("Sync now", `/api/devices/${id}/sync`)}>
                 Sync now
               </Button>
-              <Button variant="outline" disabled={!!busy} onClick={() => run("Device info", `/api/devices/${id}/info`)}>
+              <Button variant="outline" disabled={!!busy} onClick={() => void run("Device info", `/api/devices/${id}/info`)}>
                 Get info
               </Button>
-              <Button variant="outline" disabled={!!busy} onClick={() => run("Read users", `/api/devices/${id}/users`)}>
+              <Button variant="outline" disabled={!!busy} onClick={() => void run("Read users", `/api/devices/${id}/users`)}>
                 Read users
               </Button>
               <Button
                 variant="outline"
                 disabled={!!busy}
-                onClick={() => run("Read punches", `/api/devices/${id}/attendance`)}
+                onClick={() => void run("Read punches", `/api/devices/${id}/attendance`)}
               >
-                Read transactions
+                Read punches
               </Button>
             </div>
             <p className="text-xs text-muted">
@@ -194,6 +293,57 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle>Website punches from this device ({websiteTotal})</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => void loadPunches()}>
+            Refresh list
+          </Button>
+        </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          {websitePunches.length === 0 ? (
+            <p className="p-5 text-sm text-muted">
+              No punches saved on the website yet. Use <strong>Sync now</strong> after fingerprint (or after clearing).
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-paper text-left text-xs uppercase text-muted">
+                <tr>
+                  <th className="px-5 py-3">When</th>
+                  <th className="px-5 py-3">K50A User ID</th>
+                  <th className="px-5 py-3">Employee</th>
+                  <th className="px-5 py-3">Type</th>
+                  <th className="px-5 py-3">Mapped</th>
+                </tr>
+              </thead>
+              <tbody>
+                {websitePunches.map((row) => (
+                  <tr key={row.id} className="border-t border-line">
+                    <td className="px-5 py-3 font-mono text-xs">{row.when}</td>
+                    <td className="px-5 py-3 font-mono">{row.deviceUserId}</td>
+                    <td className="px-5 py-3">
+                      {row.employee ? (
+                        <>
+                          <div className="font-medium">{row.employee}</div>
+                          <div className="text-xs text-muted">{row.employeeCode}</div>
+                        </>
+                      ) : (
+                        <span className="text-signal">Unmapped — set Employee K50A User ID</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">{row.type}</td>
+                    <td className="px-5 py-3">
+                      <Badge tone={row.mapped ? "ok" : "late"}>{row.mapped ? "Yes" : "No"}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>

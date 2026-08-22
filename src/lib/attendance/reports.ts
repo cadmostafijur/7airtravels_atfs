@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDate, formatTime, startOfZonedDay, endOfZonedDay } from "@/lib/time";
 import { formatHours, isoWeekKey, monthKey } from "@/lib/hours";
 import { summaryWhere } from "@/lib/attendance/stats";
+import { loadPunchBundlesForSummaries, summaryPunchKey } from "@/lib/attendance/punches";
 
 type Row = DailyAttendanceSummary & {
   employee: Employee & { department: Department | null };
@@ -43,23 +44,34 @@ export async function loadSummaries(query: ReportQuery) {
   });
 }
 
-export function dailyRows(rows: Row[]) {
-  return rows.map((row) => ({
-    id: row.id,
-    date: formatDate(row.workDate),
-    workDate: row.workDate.toISOString(),
-    employeeCode: row.employee.employeeCode,
-    name: row.employee.name,
-    department: row.employee.department?.name ?? "",
-    status: row.status,
-    checkIn: formatTime(row.checkInAt),
-    checkOut: formatTime(row.checkOutAt),
-    lateMinutes: row.lateMinutes,
-    earlyMinutes: row.earlyMinutes,
-    overtimeMinutes: row.overtimeMinutes,
-    workedMinutes: row.workedMinutes,
-    hours: formatHours(row.workedMinutes),
-  }));
+export async function dailyRows(rows: Row[]) {
+  const punches = await loadPunchBundlesForSummaries(rows);
+  return rows.map((row) => {
+    const bundle = punches.get(summaryPunchKey(row.employeeId, row.workDate));
+    const inLabel =
+      bundle && bundle.inTimes.length > 1 ? bundle.inTimes.join(" · ") : formatTime(row.checkInAt);
+    const outLabel =
+      bundle && bundle.outTimes.length > 1 ? bundle.outTimes.join(" · ") : formatTime(row.checkOutAt);
+    return {
+      id: row.id,
+      date: formatDate(row.workDate),
+      workDate: row.workDate.toISOString(),
+      employeeCode: row.employee.employeeCode,
+      name: row.employee.name,
+      department: row.employee.department?.name ?? "",
+      status: row.status,
+      checkIn: inLabel,
+      checkOut: outLabel,
+      punches: bundle?.pairsLabel ?? "—",
+      punchCount: bundle?.punchCount ?? 0,
+      lateMinutes: row.lateMinutes,
+      earlyMinutes: row.earlyMinutes,
+      overtimeMinutes: row.overtimeMinutes,
+      workedMinutes: row.workedMinutes,
+      hours: formatHours(row.workedMinutes),
+      notes: row.notes ?? "",
+    };
+  });
 }
 
 function bucket(rows: Row[], keyFn: (row: Row) => string, label: (key: string, sample: Row) => Record<string, string>) {
@@ -201,8 +213,21 @@ export async function buildReport(query: ReportQuery) {
 
   return {
     type: type === "hours" ? "hours" : type,
-    columns: ["Date", "Code", "Name", "Department", "Status", "In", "Out", "Late", "Early", "OT", "Hours"],
-    rows: dailyRows(summaries),
+    columns: [
+      "Date",
+      "Code",
+      "Name",
+      "Department",
+      "Status",
+      "In",
+      "Out",
+      "Punches",
+      "Late",
+      "Early",
+      "OT",
+      "Hours",
+    ],
+    rows: await dailyRows(summaries),
   };
 }
 
@@ -216,6 +241,7 @@ export function exportMatrix(report: Awaited<ReturnType<typeof buildReport>>) {
       if (key === "code") return String(record.employeeCode ?? "");
       if (key === "in") return String(record.checkIn ?? "");
       if (key === "out") return String(record.checkOut ?? "");
+      if (key === "punches") return String(record.punches ?? "");
       if (key === "late") return String(record.lateMinutes ?? record.late ?? "");
       if (key === "early") return String(record.earlyMinutes ?? "");
       if (key === "ot") return String(record.overtimeMinutes ?? "");

@@ -16,27 +16,8 @@ export function isSimulationAllowed(): boolean {
   return true;
 }
 
-export const env = {
-  nodeEnv: process.env.NODE_ENV ?? "development",
-  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-  appName: process.env.NEXT_PUBLIC_APP_NAME ?? "7 Air Travels ATFS",
-  timezone: process.env.APP_TIMEZONE ?? process.env.NEXT_PUBLIC_APP_TIMEZONE ?? "Asia/Dhaka",
-  databaseUrl: required("DATABASE_URL", "postgresql://atfs:atfs@localhost:5432/atfs?schema=public"),
-  sessionSecret: required("SESSION_SECRET", "dev-only-change-me-session-secret-32ch"),
-  workerPort: Number(process.env.WORKER_PORT ?? 3001),
-  workerInternalSecret: process.env.WORKER_INTERNAL_SECRET ?? "dev-internal-secret",
-  socketUrl: process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001",
-  syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS ?? 30000),
-  enableRealtimeDeviceEvents: process.env.ENABLE_REALTIME_DEVICE_EVENTS === "true",
-  deviceAdapter: (process.env.DEVICE_ADAPTER ?? "mock") as "k50a" | "mock",
-  k50a: {
-    ip: process.env.K50A_IP ?? "192.168.1.201",
-    port: Number(process.env.K50A_PORT ?? 4370),
-    timeoutMs: Number(process.env.K50A_TIMEOUT_MS ?? 60000),
-    commKey: Number(process.env.K50A_COMM_KEY ?? 0),
-    location: process.env.K50A_LOCATION ?? "Main Office",
-  },
-  sms: {
+function smsConfig() {
+  return {
     provider: process.env.SMS_PROVIDER ?? "console",
     apiUrl: process.env.SMS_API_URL ?? "",
     apiKey: process.env.SMS_API_KEY ?? "",
@@ -47,5 +28,58 @@ export const env = {
     phoneParam: process.env.SMS_HTTP_PHONE_PARAM ?? "number",
     messageParam: process.env.SMS_HTTP_MESSAGE_PARAM ?? "message",
     retryFailed: process.env.SMS_RETRY_FAILED !== "false",
+    maxPunchAgeMinutes: Number(process.env.SMS_MAX_PUNCH_AGE_MINUTES ?? 60),
+  };
+}
+
+/** Lazy reads so worker dotenv (loaded before this module) and Next.js env both work. */
+export const env = {
+  get nodeEnv() {
+    return process.env.NODE_ENV ?? "development";
+  },
+  get appUrl() {
+    return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  },
+  get appName() {
+    return process.env.NEXT_PUBLIC_APP_NAME ?? "7 Air Travels ATFS";
+  },
+  get timezone() {
+    return process.env.APP_TIMEZONE ?? process.env.NEXT_PUBLIC_APP_TIMEZONE ?? "Asia/Dhaka";
+  },
+  get databaseUrl() {
+    return required("DATABASE_URL", "postgresql://atfs:atfs@localhost:5432/atfs?schema=public");
+  },
+  get sessionSecret() {
+    return required("SESSION_SECRET", "dev-only-change-me-session-secret-32ch");
+  },
+  get workerPort() {
+    return Number(process.env.WORKER_PORT ?? 3001);
+  },
+  get workerInternalSecret() {
+    return process.env.WORKER_INTERNAL_SECRET ?? "dev-internal-secret";
+  },
+  get socketUrl() {
+    return process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001";
+  },
+  get syncIntervalMs() {
+    return Number(process.env.SYNC_INTERVAL_MS ?? 30000);
+  },
+  get enableRealtimeDeviceEvents() {
+    return process.env.ENABLE_REALTIME_DEVICE_EVENTS === "true";
+  },
+  get deviceAdapter() {
+    return (process.env.DEVICE_ADAPTER ?? "mock") as "k50a" | "mock";
+  },
+  get k50a() {
+    return {
+      ip: process.env.K50A_IP ?? "192.168.1.201",
+      port: Number(process.env.K50A_PORT ?? 4370),
+      timeoutMs: Number(process.env.K50A_TIMEOUT_MS ?? 60000),
+      commKey: Number(process.env.K50A_COMM_KEY ?? 0),
+      location: process.env.K50A_LOCATION ?? "Main Office",
+    };
+  },
+  get sms() {
+    return smsConfig();
   },
 };

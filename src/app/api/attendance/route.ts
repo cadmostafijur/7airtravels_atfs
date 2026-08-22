@@ -3,6 +3,7 @@ import { jsonError, jsonOk } from "@/lib/http";
 import { requireApiSession } from "@/lib/auth/guards";
 import { startOfZonedDay, endOfZonedDay } from "@/lib/time";
 import { summaryWhere } from "@/lib/attendance/stats";
+import { loadPunchBundlesForSummaries, summaryPunchKey } from "@/lib/attendance/punches";
 
 export async function GET(request: Request) {
   try {
@@ -29,7 +30,20 @@ export async function GET(request: Request) {
       include: { employee: { include: { department: true } } },
       orderBy: [{ workDate: "desc" }, { employee: { name: "asc" } }],
     });
-    return jsonOk(summaries);
+
+    const punchMap = await loadPunchBundlesForSummaries(summaries);
+    const rows = summaries.map((row) => {
+      const punches = punchMap.get(summaryPunchKey(row.employeeId, row.workDate)) ?? {
+        punchCount: 0,
+        pairs: [],
+        pairsLabel: "—",
+        inTimes: [],
+        outTimes: [],
+      };
+      return { ...row, punches };
+    });
+
+    return jsonOk(rows);
   } catch (error) {
     return jsonError(error);
   }

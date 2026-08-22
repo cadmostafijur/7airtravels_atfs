@@ -20,7 +20,7 @@ export class FailingSmsProvider implements SmsProvider {
 }
 
 /**
- * BulkSMSBD (bulksmsbd.net) — GET/POST query params.
+ * BulkSMSBD (bulksmsbd.net) — form POST (preferred) or GET.
  * Success response_code: 202
  * Docs: api_key, type=text, number, senderid, message
  */
@@ -33,24 +33,38 @@ export class BulkSmsBdProvider implements SmsProvider {
     }
 
     const number = normalizeBdPhone(phone);
-    const url = new URL(env.sms.apiUrl);
-    url.searchParams.set("api_key", env.sms.apiKey);
-    url.searchParams.set("type", env.sms.type || "text");
-    url.searchParams.set("number", number);
-    url.searchParams.set("senderid", env.sms.senderId);
-    url.searchParams.set("message", message);
+    // Single-line body is more reliable on BD gateways than raw newlines in query strings
+    const text = flattenSmsBody(message);
+    const fields: Record<string, string> = {
+      api_key: env.sms.apiKey,
+      type: env.sms.type || "text",
+      number,
+      senderid: env.sms.senderId,
+      message: text,
+    };
 
     try {
-      const response = await fetch(url.toString(), {
-        method: env.sms.method === "GET" ? "GET" : "POST",
-      });
-      const text = await response.text();
-      const code = parseBulkSmsBdCode(text);
+      const useGet = env.sms.method === "GET";
+      let response: Response;
+      if (useGet) {
+        const url = new URL(env.sms.apiUrl);
+        for (const [key, value] of Object.entries(fields)) url.searchParams.set(key, value);
+        response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+      } else {
+        response = await fetch(env.sms.apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(fields),
+          cache: "no-store",
+        });
+      }
+      const raw = await response.text();
+      const code = parseBulkSmsBdCode(raw);
       const success = code === 202;
       return {
         success,
         provider: this.name,
-        response: text.slice(0, 2000),
+        response: enrichBulkSmsResponse(raw, code),
       };
     } catch (error) {
       return {
@@ -60,6 +74,27 @@ export class BulkSmsBdProvider implements SmsProvider {
       };
     }
   }
+}
+
+/** Prefer one line so GET/POST gateways do not drop or break the body. */
+export function flattenSmsBody(message: string): string {
+  return message
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function enrichBulkSmsResponse(text: string, code: number | null): string {
+  if (code === 1032) {
+    const ip = text.match(/ip\s+([0-9.]+)/i)?.[1];
+    const hint = ip
+      ? `IP ${ip} not whitelisted on BulkSMSBD Phone Book. Add this IP (API type) then Retry failed / Test SMS.`
+      : "IP not whitelisted on BulkSMSBD Phone Book. Add your PC public IP then Retry failed / Test SMS.";
+    return `${text}\n---\n${hint}`.slice(0, 2000);
+  }
+  return text.slice(0, 2000);
 }
 
 function parseBulkSmsBdCode(text: string): number | null {
@@ -86,10 +121,11 @@ export class BangladeshHttpSmsProvider implements SmsProvider {
     }
 
     const number = normalizeBdPhone(phone);
+    const text = flattenSmsBody(message);
     const url = new URL(env.sms.apiUrl);
     const params: Record<string, string> = {
       [env.sms.phoneParam]: number,
-      [env.sms.messageParam]: message,
+      [env.sms.messageParam]: text,
       sender: env.sms.senderId,
       senderid: env.sms.senderId,
       api_key: env.sms.apiKey,
@@ -101,12 +137,12 @@ export class BangladeshHttpSmsProvider implements SmsProvider {
       let response: Response;
       if (env.sms.method === "GET") {
         for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-        response = await fetch(url, { method: "GET" });
+        response = await fetch(url, { method: "GET", cache: "no-store" });
       } else {
         const body = env.sms.bodyTemplate
           ? env.sms.bodyTemplate
               .replaceAll("{{phone}}", number)
-              .replaceAll("{{message}}", message)
+              .replaceAll("{{message}}", text)
               .replaceAll("{{sender}}", env.sms.senderId)
               .replaceAll("{{apiKey}}", env.sms.apiKey)
           : JSON.stringify(params);
@@ -114,15 +150,16 @@ export class BangladeshHttpSmsProvider implements SmsProvider {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body,
+          cache: "no-store",
         });
       }
-      const text = await response.text();
-      const code = parseBulkSmsBdCode(text);
+      const raw = await response.text();
+      const code = parseBulkSmsBdCode(raw);
       const success = code === 202 || (code === null && response.ok);
       return {
         success,
         provider: this.name,
-        response: text.slice(0, 2000),
+        response: enrichBulkSmsResponse(raw, code).slice(0, 2000),
       };
     } catch (error) {
       return {
@@ -144,5 +181,17 @@ export function createSmsProvider(): SmsProvider {
       return new BangladeshHttpSmsProvider();
     default:
       return new ConsoleSmsProvider();
+  }
+}
+
+/** Best-effort: public IP BulkSMSBD will see from this machine/process. */
+export async function detectOutboundPublicIp(): Promise<string | null> {
+  try {
+    const response = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { ip?: string };
+    return data.ip?.trim() || null;
+  } catch {
+    return null;
   }
 }

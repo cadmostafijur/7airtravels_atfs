@@ -109,8 +109,8 @@ function sleep(ms: number) {
 
 /**
  * Harden node-zklib TCP helpers:
- * - empty attendance/user payloads should not crash on .subarray(null)
- * - swallow late timer rejections that become unhandledRejection
+ * - empty/malformed raw payloads should not crash on .subarray(null)
+ * - IMPORTANT: successful getAttendances/getUsers return arrays of records, not Buffers
  */
 function patchZkTcpSafety(zk: ZKLibInstance, timeoutMs: number) {
   if (zk.zklibTcp) zk.zklibTcp.timeout = timeoutMs;
@@ -124,10 +124,12 @@ function patchZkTcpSafety(zk: ZKLibInstance, timeoutMs: number) {
     tcp.getAttendances = async (cb?: unknown) => {
       try {
         const result = await original(cb);
-        if (!result?.data) return { data: [], err: result?.err ?? null };
-        if (!Buffer.isBuffer(result.data) && !(result.data instanceof Uint8Array)) {
-          return { data: [], err: null };
-        }
+        if (!result) return { data: [], err: null };
+        // Parsed success path returns an array of log objects
+        if (Array.isArray(result.data)) return result;
+        if (!result.data) return { data: [], err: result.err ?? null };
+        // Raw buffer path (should already be decoded by library, but keep safe)
+        if (Buffer.isBuffer(result.data) || result.data instanceof Uint8Array) return result;
         return result;
       } catch (error) {
         const detail = extractDeviceErrorMessage(error);
@@ -142,10 +144,10 @@ function patchZkTcpSafety(zk: ZKLibInstance, timeoutMs: number) {
     tcp.getUsers = async () => {
       try {
         const result = await originalUsers();
-        if (!result?.data) return { data: [], err: result?.err ?? null };
-        if (!Buffer.isBuffer(result.data) && !(result.data instanceof Uint8Array) && !Array.isArray(result.data)) {
-          return { data: [], err: null };
-        }
+        if (!result) return { data: [], err: null };
+        if (Array.isArray(result.data)) return result;
+        if (!result.data) return { data: [], err: result.err ?? null };
+        if (Buffer.isBuffer(result.data) || result.data instanceof Uint8Array) return result;
         return result;
       } catch (error) {
         const detail = extractDeviceErrorMessage(error);
@@ -279,11 +281,6 @@ export class K50AAdapter implements DeviceAdapter {
         .map((row) => this.normalizeLog((row ?? {}) as Record<string, unknown>))
         .filter((row): row is DeviceAttendanceLog => row !== null);
     } catch (error) {
-      const detail = extractDeviceErrorMessage(error);
-      // Soft-recover: empty/timeout/subarray should not hard-crash Sync when TCP is up.
-      if (/TIMEOUT|subarray|EMPTY_REPLY|UNHANDLE_CMD/i.test(detail)) {
-        return [];
-      }
       throw wrapZkError(error, "Read attendance logs failed");
     }
   }

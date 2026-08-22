@@ -41,12 +41,18 @@ export async function ingestAttendanceLog(input: {
   try {
     const inserted = await prisma.attendance.create({ data: payload });
     let summary = null;
+    let forSms = inserted;
     if (employee) {
       summary = await processDailySummary(employee.id, inserted.timestamp);
+      const refreshed = await prisma.attendance.findUnique({ where: { id: inserted.id } });
+      if (refreshed) forSms = refreshed;
     }
-    void notifyAttendanceSms(inserted, employee, summary).catch((error) => {
+    // Must await — fire-and-forget dies early on serverless / short-lived sync requests
+    try {
+      await notifyAttendanceSms(forSms, employee, summary);
+    } catch (error) {
       logger.error("sms_after_attendance_failed", { error: String(error) });
-    });
+    }
     await publishAttendance({
       id: inserted.id,
       employee: employee?.name ?? "Unknown device user",
@@ -92,8 +98,10 @@ export async function syncDeviceAttendance(deviceId: string) {
 
   try {
     const logs = await withDevice(device, (adapter) => adapter.getAttendanceLogs());
-    recordsRead = logs.length;
-    for (const log of logs) {
+    // Newest first so the latest fingerprint gets SMS before older backlog
+    const ordered = [...logs].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    recordsRead = ordered.length;
+    for (const log of ordered) {
       const result = await ingestAttendanceLog({ device, log, source: device.adapterType === "mock" ? "SIMULATION" : "DEVICE" });
       if (result.inserted) recordsInserted += 1;
       else if (result.skipped) recordsSkipped += 1;
@@ -121,7 +129,12 @@ export async function syncDeviceAttendance(deviceId: string) {
         lastSyncAt: new Date(),
         totalSynced: { increment: recordsInserted },
         status: "ONLINE",
-        lastError: recordsRead === 0 ? "Sync OK — no new punches on device (or empty log buffer)." : null,
+        lastError:
+          recordsRead === 0
+            ? "Sync OK — device returned 0 punches (empty log buffer)."
+            : recordsInserted === 0 && recordsSkipped > 0
+              ? `Sync OK — ${recordsSkipped} punch(es) already on website (skipped). Clear website punches to re-import, or punch again for a new SMS.`
+              : null,
       },
     });
     return { recordsRead, recordsInserted, recordsSkipped, recordsFailed, status };

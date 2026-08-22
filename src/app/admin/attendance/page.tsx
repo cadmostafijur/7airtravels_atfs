@@ -12,6 +12,13 @@ import { api } from "@/lib/api";
 import { formatDate, formatTime } from "@/lib/time";
 import { formatHours } from "@/lib/hours";
 
+type PunchPair = {
+  inAt: string;
+  outAt: string | null;
+  inLabel: string;
+  outLabel: string;
+};
+
 type Row = {
   id: string;
   workDate: string;
@@ -24,6 +31,13 @@ type Row = {
   workedMinutes: number;
   notes: string | null;
   employee: { id: string; name: string; employeeCode: string; department: { name: string } | null };
+  punches?: {
+    punchCount: number;
+    pairs: PunchPair[];
+    pairsLabel: string;
+    inTimes: string[];
+    outTimes: string[];
+  };
 };
 
 type Employee = { id: string; name: string; employeeCode: string };
@@ -179,33 +193,78 @@ export default function AttendancePage() {
     });
   }
 
+  async function rebuild() {
+    try {
+      const result = await api<{ updated: number; from: string; to: string }>("/api/attendance/recompute", {
+        method: "POST",
+        body: JSON.stringify({ from, to }),
+      });
+      toast.success(`Rebuilt ${result.updated} day(s) from ${result.from} to ${result.to}`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rebuild failed");
+    }
+  }
+
+  function askClearWebsite() {
+    setConfirm({
+      title: "Clear all website punches?",
+      description:
+        "Deletes every punch, daily register, and SMS log on the website for a clean retest. The K50A device is not wiped.",
+      confirmLabel: "Clear website data",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const data = await api<{ deleted: { punches: number; summaries: number; smsLogs: number } }>(
+            "/api/attendance/clear-website",
+            { method: "POST", body: "{}" },
+          );
+          toast.success(
+            `Cleared ${data.deleted.punches} punches · ${data.deleted.summaries} summaries · ${data.deleted.smsLogs} SMS`,
+          );
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Clear failed");
+        }
+      },
+    });
+  }
+
   return (
     <div>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Processed attendance"
         title="Daily register"
-        description="Summaries from K50A punches. Admins can edit status and times. Raw fingerprint logs are kept separately."
+        description="Summaries from K50A punches after Sync. Read punches on the device page only views live device data — Sync saves it here."
         actions={
           canWrite ? (
-            <Button
-              onClick={() => {
-                setCreating(true);
-                setForm({
-                  employeeId: employees[0]?.id ?? "",
-                  workDate: new Date().toISOString().slice(0, 10),
-                  status: "PRESENT",
-                  checkInAt: "",
-                  checkOutAt: "",
-                  notes: "",
-                  lateMinutes: 0,
-                  earlyMinutes: 0,
-                  overtimeMinutes: 0,
-                });
-              }}
-            >
-              Add entry
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => void rebuild()}>
+                Rebuild from punches
+              </Button>
+              <Button variant="danger" onClick={askClearWebsite}>
+                Clear website punches
+              </Button>
+              <Button
+                onClick={() => {
+                  setCreating(true);
+                  setForm({
+                    employeeId: employees[0]?.id ?? "",
+                    workDate: new Date().toISOString().slice(0, 10),
+                    status: "PRESENT",
+                    checkInAt: "",
+                    checkOutAt: "",
+                    notes: "",
+                    lateMinutes: 0,
+                    earlyMinutes: 0,
+                    overtimeMinutes: 0,
+                  });
+                }}
+              >
+                Add entry
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -267,6 +326,7 @@ export default function AttendancePage() {
                 <th className="px-5 py-3">Department</th>
                 <th className="px-5 py-3">In</th>
                 <th className="px-5 py-3">Out</th>
+                <th className="px-5 py-3">All punches</th>
                 <th className="px-5 py-3">Hours</th>
                 <th className="px-5 py-3">Late</th>
                 <th className="px-5 py-3">Early</th>
@@ -283,13 +343,28 @@ export default function AttendancePage() {
                     <div className="text-xs text-muted">{row.employee.employeeCode}</div>
                   </td>
                   <td className="px-5 py-3">{row.employee.department?.name ?? "—"}</td>
-                  <td className="px-5 py-3 font-mono">{formatTime(row.checkInAt)}</td>
-                  <td className="px-5 py-3 font-mono">{formatTime(row.checkOutAt)}</td>
+                  <td className="px-5 py-3 font-mono text-xs">
+                    {row.punches?.inTimes?.length
+                      ? row.punches.inTimes.map((t) => <div key={`in-${row.id}-${t}`}>{t}</div>)
+                      : formatTime(row.checkInAt)}
+                  </td>
+                  <td className="px-5 py-3 font-mono text-xs">
+                    {row.punches?.outTimes?.length
+                      ? row.punches.outTimes.map((t) => <div key={`out-${row.id}-${t}`}>{t}</div>)
+                      : formatTime(row.checkOutAt)}
+                  </td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted">
+                    {row.punches?.pairsLabel ?? "—"}
+                    {row.punches && row.punches.punchCount > 0 ? (
+                      <div className="mt-0.5 text-[10px] uppercase tracking-wide">{row.punches.punchCount} punch(es)</div>
+                    ) : null}
+                  </td>
                   <td className="px-5 py-3 font-mono">{formatHours(row.workedMinutes)}</td>
                   <td className="px-5 py-3">{row.lateMinutes}</td>
                   <td className="px-5 py-3">{row.earlyMinutes}</td>
                   <td className="px-5 py-3">
                     <Badge tone={statusTone(row.status)}>{row.status}</Badge>
+                    {row.notes ? <div className="mt-1 text-[11px] text-muted">{row.notes}</div> : null}
                   </td>
                   {canWrite ? (
                     <td className="px-5 py-3">

@@ -36,6 +36,7 @@ function cell(row: Record<string, unknown>, column: string) {
   if (key === "code") return String(row.employeeCode ?? "");
   if (key === "in") return String(row.checkIn ?? "");
   if (key === "out") return String(row.checkOut ?? "");
+  if (key === "punches") return String(row.punches ?? "");
   if (key === "late") return String(row.lateMinutes ?? row.late ?? "");
   if (key === "early") return String(row.earlyMinutes ?? "");
   if (key === "ot") return String(row.overtimeMinutes ?? "");
