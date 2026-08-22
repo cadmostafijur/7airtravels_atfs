@@ -6,7 +6,9 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label } from "@/components/ui/field";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/time";
 import { relativeTime } from "@/lib/utils";
@@ -40,11 +42,13 @@ type Device = {
 
 export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [device, setDevice] = useState<Device | null>(null);
   const [ip, setIp] = useState("");
   const [port, setPort] = useState(4370);
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<unknown>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   async function load() {
     const data = await api<Device>(`/api/devices/${id}`);
@@ -83,16 +87,41 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
     }
   }
 
+  function askDelete() {
+    if (!device) return;
+    setConfirm({
+      title: `Delete ${device.name}?`,
+      description: "Removes this device and its website sync/punch logs. The physical K50A is not wiped.",
+      confirmLabel: "Delete device",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/devices/${id}`, { method: "DELETE" });
+          toast.success("Device deleted");
+          router.push("/admin/devices");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
+  }
+
   if (!device) return <p className="text-sm text-muted">Loading device…</p>;
 
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Hardware diagnostic"
         title={device.name}
         description="Phase 1 connectivity test: TCP probe first, then ZK protocol handshake. The K50A adapter is isolated and replaceable."
         actions={
-          <Badge tone={device.status === "ONLINE" ? "ok" : "muted"}>{device.status}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone={device.status === "ONLINE" ? "ok" : "muted"}>{device.status}</Badge>
+            <Button variant="danger" size="sm" onClick={askDelete}>
+              Delete device
+            </Button>
+          </div>
         }
       />
       <div className="grid gap-6 xl:grid-cols-3">

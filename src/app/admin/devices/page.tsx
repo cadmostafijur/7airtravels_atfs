@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog, type ConfirmState } from "@/components/ui/confirm-dialog";
 import { Input, Label, Select } from "@/components/ui/field";
 import { api } from "@/lib/api";
 import { relativeTime } from "@/lib/utils";
@@ -27,10 +28,11 @@ type Device = {
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [form, setForm] = useState({
-    name: "K50A-002",
+    name: "K50A-001",
     adapterType: "k50a" as "k50a" | "mock",
-    ipAddress: "192.168.1.201",
+    ipAddress: "192.168.0.201",
     port: 4370,
     location: "Main Office",
   });
@@ -53,8 +55,27 @@ export default function DevicesPage() {
     }
   }
 
+  function askDelete(device: Device) {
+    setConfirm({
+      title: `Delete ${device.name}?`,
+      description: `Removes this device record (${device.ipAddress}:${device.port}) and its sync/punch logs from the website. The physical K50A is not wiped.`,
+      confirmLabel: "Delete device",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/devices/${device.id}`, { method: "DELETE" });
+          toast.success("Device deleted");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
+  }
+
   return (
     <div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       <PageHeader
         eyebrow="Hardware"
         title="K50A devices"
@@ -71,6 +92,7 @@ export default function DevicesPage() {
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Last sync</th>
                   <th className="px-5 py-3">Synced</th>
+                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -93,6 +115,11 @@ export default function DevicesPage() {
                     </td>
                     <td className="px-5 py-4">{relativeTime(device.lastSyncAt)}</td>
                     <td className="px-5 py-4 font-mono">{device.totalSynced.toLocaleString()}</td>
+                    <td className="px-5 py-4">
+                      <Button size="sm" variant="danger" onClick={() => askDelete(device)}>
+                        Delete
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -117,6 +117,24 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     });
   }
 
+  function askDelete() {
+    setConfirm({
+      title: "Delete this employee permanently?",
+      description: "Removes the employee and their attendance history from the website. This cannot be undone.",
+      confirmLabel: "Delete forever",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/employees/${id}?hard=true`, { method: "DELETE" });
+          toast.success("Employee deleted");
+          window.location.href = "/admin/employees";
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
+  }
+
   if (!employee) return <p className="text-sm text-muted">Loading…</p>;
 
   const exportHref = `/api/reports/export?format=csv&type=daily&employeeId=${id}&from=2020-01-01&to=${new Date().toISOString().slice(0, 10)}`;
@@ -138,6 +156,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 Deactivate
               </Button>
             ) : null}
+            <Button variant="danger" onClick={askDelete}>
+              Delete
+            </Button>
           </>
         }
       />

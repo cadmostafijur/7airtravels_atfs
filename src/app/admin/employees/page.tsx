@@ -96,6 +96,24 @@ export default function EmployeesPage() {
     });
   }
 
+  function askDelete(id: string, name: string) {
+    setConfirm({
+      title: `Delete ${name} permanently?`,
+      description: "This removes the employee and their attendance summaries, leaves, and linked punch history. This cannot be undone.",
+      confirmLabel: "Delete forever",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/employees/${id}?hard=true`, { method: "DELETE" });
+          toast.success("Employee deleted");
+          await load();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed");
+        }
+      },
+    });
+  }
+
   return (
     <div>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
@@ -188,11 +206,16 @@ export default function EmployeesPage() {
                       <Badge tone={row.status === "ACTIVE" ? "ok" : "muted"}>{row.status}</Badge>
                     </td>
                     <td className="px-5 py-3">
-                      {row.status === "ACTIVE" ? (
-                        <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
-                          Deactivate
+                      <div className="flex flex-wrap gap-2">
+                        {row.status === "ACTIVE" ? (
+                          <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
+                            Deactivate
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="danger" onClick={() => askDelete(row.id, row.name)}>
+                          Delete
                         </Button>
-                      ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

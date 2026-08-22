@@ -71,15 +71,47 @@ export async function DELETE(request: Request, context: Ctx) {
   try {
     const admin = await requireApiSession(request, "employees.write");
     const { id } = await context.params;
-    await prisma.employee.update({ where: { id }, data: { status: "INACTIVE" } });
+    const hard = new URL(request.url).searchParams.get("hard") === "true";
+
+    const existing = await prisma.employee.findUnique({ where: { id } });
+    if (!existing) throw new AppError("Employee not found", 404);
+
+    if (!hard) {
+      await prisma.employee.update({ where: { id }, data: { status: "INACTIVE" } });
+      await writeAudit({
+        adminId: admin.id,
+        action: "EMPLOYEE_DEACTIVATE",
+        entity: "Employee",
+        entityId: id,
+        ipAddress: clientIp(request),
+      });
+      return jsonOk({ deactivated: true });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const attendanceIds = (
+        await tx.attendance.findMany({ where: { employeeId: id }, select: { id: true } })
+      ).map((row) => row.id);
+
+      if (attendanceIds.length) {
+        await tx.smsLog.deleteMany({ where: { attendanceId: { in: attendanceIds } } });
+        await tx.attendance.deleteMany({ where: { id: { in: attendanceIds } } });
+      }
+
+      await tx.dailyAttendanceSummary.deleteMany({ where: { employeeId: id } });
+      await tx.leave.deleteMany({ where: { employeeId: id } });
+      await tx.employee.delete({ where: { id } });
+    });
+
     await writeAudit({
       adminId: admin.id,
-      action: "EMPLOYEE_DEACTIVATE",
+      action: "EMPLOYEE_DELETE",
       entity: "Employee",
       entityId: id,
       ipAddress: clientIp(request),
+      metadata: { employeeCode: existing.employeeCode, name: existing.name },
     });
-    return jsonOk({ deactivated: true });
+    return jsonOk({ deleted: true });
   } catch (error) {
     return jsonError(error);
   }
