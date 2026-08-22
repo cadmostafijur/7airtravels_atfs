@@ -57,23 +57,76 @@ pm2 start npm --name atfs-worker -- run start:worker
 pm2 save
 ```
 
+## Best setup (CEO never opens anything)
+
+### Option A — Cloud push (no mini PC)
+
+If the K50A has a **Cloud / ADMS** menu and internet access, the device pushes punches to Vercel. **No office worker.**
+
+Full steps: **[ADMS-CLOUD-PUSH.md](./ADMS-CLOUD-PUSH.md)**
+
+If there is **no** ADMS/Cloud menu on the device, Option A is impossible — use Option B.
+
+### Option B — Mini PC always on + Vercel website
+
+| Piece | Best choice | Why |
+| --- | --- | --- |
+| Admin website | **Vercel** | CEO/admins use `https://…` from phone anytime |
+| Database | **Neon** (already) | Cloud shared DB |
+| Sync + SMS | **Small always-on mini PC** in office | Only machine that can see LAN-only K50A |
+
+### Why not “Vercel only” without ADMS?
+
+A LAN-only K50A cannot be reached by Vercel. Then you need Option B.
+
+### What to buy / use (Option B)
+
+1. Cheap **mini PC** (or spare desktop) — leave it **always powered on** (disable Sleep/Hibernate).
+2. Ethernet/Wi‑Fi same network as K50A (`192.168.0.x`).
+3. Install Node.js + this project once.
+4. Run **as Administrator** once:
+
+```bash
+npm ci
+npm run worker:autostart
+```
+
+Worker starts at **PC boot** (no login click, no terminal).
+
+5. Deploy website to **Vercel** for the CEO.
+
+### Power / shutdown rules
+
+| Office PC / mini PC | Fingerprint SMS |
+| --- | --- |
+| ON (worker running) | Works |
+| Sleep / Shutdown / Power cut | **Stops** until power + boot again |
+| Only website on Vercel, no mini PC | Website opens, **SMS does not** |
+
+Optional: small UPS so short load-shedding does not kill the mini PC.
+
+### What the CEO does day-to-day
+
+- Open Vercel URL → login → see attendance / SMS logs  
+- **Never** starts worker, Cursor, or localhost  
+
+#### Prefer no office PC at all?
+
+If the K50A has a **Cloud / ADMS** menu and internet, use push to Vercel instead of a worker:
+
+→ See **[ADMS-CLOUD-PUSH.md](./ADMS-CLOUD-PUSH.md)**
+
+If the device has **no** ADMS menu, cloud-only is impossible — use the mini PC / worker path above.
+
 ## Always-on office worker (required)
 
 The K50A is on the **office LAN**. Vercel (cloud) cannot reach it. Something in the office must run the sync worker 24/7.
 
 **This is normal for biometric devices** — not a Vercel bug.
 
-### Recommended setup
-
-| Piece | Where | Client sees it? |
-| --- | --- | --- |
-| Admin website | **Vercel** | Yes — normal `https://…` URL |
-| Neon database | Cloud | No |
-| Sync + SMS worker | **Office PC** (background) | No — starts at Windows login |
-
 ### Install worker so nobody opens a terminal
 
-On the office PC (same Wi‑Fi/LAN as K50A), once:
+On the office mini PC (same Wi‑Fi/LAN as K50A), **PowerShell as Administrator**, once:
 
 ```bash
 npm ci
@@ -82,11 +135,11 @@ npm run worker:autostart
 
 That registers a Windows Scheduled Task (`7AirTravels-ATFS-Worker`) which:
 
-- Starts when someone logs into Windows
+- Starts when the PC **boots**
 - Restarts on failure
-- Runs hidden in the background
+- Runs in the background (no Cursor window)
 
-Keep that PC **powered on** (or wake it each morning). Remove with:
+Keep that PC **powered on**. Remove with:
 
 ```bash
 npm run worker:autostart:remove

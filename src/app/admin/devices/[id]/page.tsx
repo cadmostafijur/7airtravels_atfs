@@ -21,6 +21,7 @@ type Device = {
   ipAddress: string;
   port: number;
   location: string | null;
+  serialNumber: string | null;
   status: string;
   lastSyncAt: string | null;
   lastConnectedAt: string | null;
@@ -57,6 +58,7 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
   const [device, setDevice] = useState<Device | null>(null);
   const [ip, setIp] = useState("");
   const [port, setPort] = useState(4370);
+  const [serialNumber, setSerialNumber] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<unknown>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
@@ -74,6 +76,7 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
     setDevice(data);
     setIp(data.ipAddress);
     setPort(data.port);
+    setSerialNumber(data.serialNumber ?? "");
     await loadPunches().catch(() => {
       setWebsitePunches([]);
       setWebsiteTotal(0);
@@ -87,9 +90,13 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
   async function saveNetwork() {
     await api(`/api/devices/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ ipAddress: ip, port }),
+      body: JSON.stringify({
+        ipAddress: ip,
+        port,
+        serialNumber: serialNumber.trim() || null,
+      }),
     });
-    toast.success("Network settings saved");
+    toast.success("Device settings saved");
     await load();
   }
 
@@ -251,9 +258,21 @@ export default function DeviceDiagnosticPage({ params }: { params: Promise<{ id:
               <Label>TCP port</Label>
               <Input type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} />
             </div>
+            <div>
+              <Label>Serial Number (ADMS SN)</Label>
+              <Input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="From K50A Cloud/ADMS menu"
+              />
+            </div>
             <Button variant="outline" onClick={() => void saveNetwork()}>
-              Save IP / port
+              Save IP / port / SN
             </Button>
+            <p className="text-xs text-muted">
+              Cloud push (no worker): set SN, deploy to Vercel, point device ADMS URL to{" "}
+              <code>/iclock</code>. See docs/ADMS-CLOUD-PUSH.md
+            </p>
             <div className="grid grid-cols-2 gap-2 pt-2">
               <Button disabled={!!busy} onClick={() => void run("Test connection", `/api/devices/${id}/test`)}>
                 Test connection

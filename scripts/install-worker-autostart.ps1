@@ -1,6 +1,8 @@
-# Install ATFS office worker to start automatically (no terminal needed).
-# Website can be on Vercel; this PC only runs the worker for K50A + SMS.
-# Usage: powershell -ExecutionPolicy Bypass -File scripts\install-worker-autostart.ps1
+# Install ATFS office worker to start at Windows BOOT (no login, no terminal).
+# Best used on a dedicated always-on mini PC next to the router/K50A.
+# Run PowerShell as Administrator:
+#   cd E:\7airtravels_atfs
+#   npm run worker:autostart
 
 $ErrorActionPreference = "Stop"
 $taskName = "7AirTravels-ATFS-Worker"
@@ -19,7 +21,7 @@ $arguments = "`"$tsxCli`" --require `"$stub`" `"$worker`""
 
 Write-Host "Repo: $repoRoot"
 Write-Host "Node: $nodeExe"
-Write-Host "Task: $taskName"
+Write-Host "Task: $taskName (At startup)"
 Write-Host ""
 
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -29,29 +31,36 @@ if ($existing) {
 }
 
 $action = New-ScheduledTaskAction -Execute $nodeExe -Argument $arguments -WorkingDirectory $repoRoot
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+# Boot time — does not wait for someone to open Windows desktop
+$trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -StartWhenAvailable `
-  -RestartCount 3 `
+  -RestartCount 999 `
   -RestartInterval (New-TimeSpan -Minutes 1) `
   -ExecutionTimeLimit ([TimeSpan]::Zero)
+
+# Current user: needs password for "run whether logged on or not" in GUI.
+# AtStartup + interactive user still works after auto-login / always-on mini PC.
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask `
   -TaskName $taskName `
   -Action $action `
   -Trigger $trigger `
   -Settings $settings `
-  -Description "7 Air Travels ATFS - K50A sync and SMS worker" `
+  -Principal $principal `
+  -Description "7 Air Travels ATFS - K50A sync and SMS. Starts at PC boot." `
   -Force | Out-Null
 
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 
 Write-Host ""
-Write-Host "Installed. Worker starts at Windows logon and is running now." -ForegroundColor Green
+Write-Host "OK — worker task installed (starts when PC powers on)." -ForegroundColor Green
 Write-Host "Check: http://127.0.0.1:3001/health"
 Write-Host ""
-Write-Host "Remove later: npm run worker:autostart:remove"
-Write-Host "Client website: deploy to Vercel. This PC only runs the worker."
+Write-Host "IMPORTANT: keep this PC powered ON. If PC is off, SMS stops."
+Write-Host "Best: dedicated mini PC that never shuts down + website on Vercel."
+Write-Host "Remove: npm run worker:autostart:remove"
