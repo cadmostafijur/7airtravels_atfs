@@ -88,10 +88,10 @@ A LAN-only K50A cannot be reached by Vercel. Then you need Option B.
 
 ```bash
 npm ci
-npm run worker:autostart
+npm run service:install
 ```
 
-Worker starts at **PC boot** (no login click, no terminal).
+Worker starts at **PC boot** as a Windows service (no login click, no terminal).
 
 5. Deploy website to **Vercel** for the CEO.
 
@@ -126,24 +126,38 @@ The K50A is on the **office LAN**. Vercel (cloud) cannot reach it. Something in 
 
 ### Install worker so nobody opens a terminal
 
+**Recommended:** NSSM Windows Service (auto-start at boot, file logging, auto-restart).
+
 On the office mini PC (same Wi‑Fi/LAN as K50A), **PowerShell as Administrator**, once:
 
 ```bash
 npm ci
-npm run worker:autostart
+npm run service:install
 ```
 
-That registers a Windows Scheduled Task (`7AirTravels-ATFS-Worker`) which:
+That registers Windows service `7AirTravels-ATFS-Worker` which:
 
-- Starts when the PC **boots**
-- Restarts on failure
-- Runs in the background (no Cursor window)
+- Starts automatically when Windows **boots**
+- Runs in the background (no terminal, no Cursor)
+- Restarts on crash (10 s delay, 30 s throttle)
+- Writes logs to `logs/worker/`
 
-Keep that PC **powered on**. Remove with:
+Manage without admin (after install):
 
 ```bash
-npm run worker:autostart:remove
+npm run service:status
+npm run service:restart
+npm run service:stop
+npm run service:start
 ```
+
+Remove (Administrator):
+
+```bash
+npm run service:uninstall
+```
+
+**Legacy alternative:** Task Scheduler via `npm run worker:autostart` (still supported).
 
 ### Manual (testing only)
 

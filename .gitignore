@@ -19,6 +19,10 @@
 
 # production
 /build
+/dist
+/logs/worker/*.log
+/logs/worker/*.log.*
+/tools/nssm/
 
 # misc
 .DS_Store
