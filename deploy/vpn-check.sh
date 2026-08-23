@@ -10,7 +10,16 @@ set -uo pipefail
 DEV_IP="${K50A_IP:-192.168.0.201}"
 DEV_PORT="${K50A_PORT:-4370}"
 VPN_IF="${VPN_IF:-tun0}"
-UNIT="${VPN_UNIT:-openvpn-client@atfs}"
+# Path A puts an OpenVPN *client* on this VPS (router is the server); Path B
+# puts a *server* here and the office box dials in. Detect which one exists so
+# the same script works for both router models.
+detect_unit() {
+  if [[ -n "${VPN_UNIT:-}" ]]; then echo "$VPN_UNIT"; return; fi
+  if [[ -f /etc/openvpn/client/atfs.conf ]]; then echo "openvpn-client@atfs"; return; fi
+  if [[ -f /etc/openvpn/server/atfs.conf ]]; then echo "openvpn-server@atfs"; return; fi
+  echo "openvpn-client@atfs"
+}
+UNIT="$(detect_unit)"
 
 ok()   { printf '  \033[32mOK\033[0m   %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; }

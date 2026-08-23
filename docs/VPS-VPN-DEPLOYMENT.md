@@ -27,14 +27,21 @@ the tunnel breaks, the failure says so instead of reporting a generic timeout.
 
 ## Prerequisites
 
+- An office router that can run an **OpenVPN server** (Archer C6 yes, Archer
+  C20 **no** — see [ROUTER-SETUP.md](./ROUTER-SETUP.md)).
 - The office WAN must have a **public IP** (static, or dynamic + DDNS). The
-  Archer C6 is the OpenVPN *server*, so the VPS must be able to dial in. Behind
+  router is the OpenVPN *server*, so the VPS must be able to dial in. Behind
   CGNAT this topology is impossible — see [If the office is behind CGNAT](#if-the-office-is-behind-cgnat).
 - The K50A must use the **Archer C6 as its default gateway**, or replies to VPN
   clients never find their way back.
 - A DNS `A` record: `atfs.7airtravels.com` → `104.207.75.193`.
 
 ---
+
+> **Check the router model first.** These steps assume an **Archer C6**, which
+> has a built-in OpenVPN server. An **Archer C20 has no VPN Server menu at all**
+> and needs the reverse-tunnel path instead. See
+> **[ROUTER-SETUP.md](./ROUTER-SETUP.md)** before doing anything in this section.
 
 ## 1. Archer C6 — OpenVPN server
 
@@ -197,3 +204,12 @@ Flip the tunnel instead: run a VPN *server* on the VPS (which has a public IP)
 and have an always-on office box dial **out** to it. Everything downstream of
 the tunnel — the worker, the device record, nginx — is unchanged, because the
 application only ever sees a route to `192.168.0.201`.
+
+That is **Path B**, and it is scripted:
+
+```bash
+bash /var/www/atfs/deploy/openvpn/vps-server-setup.sh
+```
+
+Full steps in [ROUTER-SETUP.md](./ROUTER-SETUP.md). The same path is what an
+Archer C20 office must use, regardless of CGNAT.
