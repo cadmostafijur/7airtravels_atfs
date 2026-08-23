@@ -57,10 +57,25 @@ export type DeviceAdapter = {
   clearAttendanceLogs(): Promise<void>;
 };
 
+/**
+ * Why the probe failed. Over a VPN the difference matters: a dead tunnel and a
+ * powered-off terminal look identical unless the socket error code is kept.
+ */
+export type TcpProbeDiagnosis =
+  | "ok"
+  | "tunnel_down"
+  | "no_reply"
+  | "port_closed"
+  | "bad_address"
+  | "unknown";
+
 export type TcpProbeResult = {
   ok: boolean;
   ipAddress: string;
   port: number;
   latencyMs: number;
   error?: string;
+  diagnosis?: TcpProbeDiagnosis;
+  /** Operator-facing next step for `diagnosis`. */
+  hint?: string;
 };

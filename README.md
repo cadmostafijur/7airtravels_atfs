@@ -177,6 +177,10 @@ Notification key: `attendanceId + eventType + recipient`. Successful SMS is neve
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
+Live deployment: **VPS + OpenVPN to the office router** — the VPS reaches the
+LAN-only K50A through a tunnel to the Archer C6, so no office PC is needed.
+See [docs/VPS-VPN-DEPLOYMENT.md](docs/VPS-VPN-DEPLOYMENT.md).
+
 **Docker is not required.** With Neon PostgreSQL you deploy two Node processes on a VPS or office server:
 
 1. **Web** — `npm run build && npm run start` (port 3000)

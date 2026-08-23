@@ -15,12 +15,15 @@ function arg(name: string, fallback?: string) {
 }
 
 async function main() {
-  const ip = arg("ip", process.env.K50A_IP ?? "192.168.1.201")!;
+  const ip = arg("ip", process.env.K50A_IP ?? "192.168.0.201")!;
   const port = Number(arg("port", process.env.K50A_PORT ?? "4370"));
   console.log(`TCP probe ${ip}:${port}`);
-  const tcp = await probeTcp(ip, port, 5000);
+  const tcp = await probeTcp(ip, port, 8000);
   console.log(tcp);
   if (!tcp.ok) {
+    // Across the VPN, the hint names which hop is broken.
+    if (tcp.hint) console.error(`
+What to check: ${tcp.hint}`);
     process.exitCode = 2;
     return;
   }

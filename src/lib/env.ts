@@ -55,6 +55,14 @@ export const env = {
   get workerPort() {
     return Number(process.env.WORKER_PORT ?? 3001);
   },
+  /**
+   * Interface the worker binds to. Defaults to all interfaces so an office LAN
+   * deployment can serve Socket.IO to other machines directly. On the VPS set
+   * WORKER_HOST=127.0.0.1 — nginx is the only thing that should reach it.
+   */
+  get workerHost() {
+    return process.env.WORKER_HOST ?? "0.0.0.0";
+  },
   get workerInternalSecret() {
     return process.env.WORKER_INTERNAL_SECRET ?? "dev-internal-secret";
   },

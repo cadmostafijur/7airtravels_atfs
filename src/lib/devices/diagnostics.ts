@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createDeviceAdapter } from "@/lib/devices/factory";
 import { probeTcp } from "@/lib/devices/tcp-probe";
 import type { DeviceAdapter, DeviceAttendanceLog, DeviceInfo, DeviceUser } from "@/lib/devices/types";
-import { publicErrorMessage } from "@/lib/errors";
+import { DeviceError, publicErrorMessage } from "@/lib/errors";
 import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
 import { logger } from "@/lib/logger";
 import type { Device, Prisma } from "@prisma/client";
@@ -21,6 +21,17 @@ async function commLog(
   });
 }
 
+/**
+ * A TCP handshake needs seconds, not the full ZK read budget. Capping it keeps a
+ * dead VPN tunnel from stalling every sync cycle for the whole device timeout,
+ * while still allowing for tunnel latency.
+ */
+function tcpProbeTimeoutMs(device: Device): number {
+  const configured = Number(process.env.K50A_TCP_PROBE_TIMEOUT_MS ?? 8000);
+  const ceiling = device.timeoutMs > 0 ? device.timeoutMs : configured;
+  return Math.min(Math.max(configured, 1000), ceiling);
+}
+
 export async function withDevice<T>(
   device: Device,
   fn: (adapter: DeviceAdapter) => Promise<T>,
@@ -32,6 +43,26 @@ export async function withDevice<T>(
       data: { timeoutMs: 60_000 },
     });
   }
+  // Preflight: across the VPN a dead tunnel would otherwise burn the full ZK
+  // timeout (and its retries) on every sync cycle. A few seconds of TCP tells us
+  // the same thing, and names the hop that broke.
+  if (device.adapterType !== "mock") {
+    const reachable = await probeTcp(device.ipAddress, device.port, tcpProbeTimeoutMs(device));
+    if (!reachable.ok) {
+      const message = [reachable.error ?? "TCP probe failed", reachable.hint].filter(Boolean).join(" — ");
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { status: "OFFLINE", lastError: message },
+      });
+      await commLog(device.id, "TCP_PREFLIGHT", false, message, { ...reachable });
+      throw new DeviceError(
+        `K50A unreachable at ${device.ipAddress}:${device.port}. ${reachable.hint ?? ""}`.trim(),
+        reachable.diagnosis ?? "unreachable",
+        503,
+      );
+    }
+  }
+
   const adapter = createDeviceAdapter(device.adapterType, {
     ipAddress: device.ipAddress,
     port: device.port,
@@ -61,15 +92,17 @@ export async function withDevice<T>(
 
 export async function testDeviceConnection(device: Device) {
   const started = Date.now();
-  const tcp = await probeTcp(device.ipAddress, device.port, device.timeoutMs);
+  const tcp = await probeTcp(device.ipAddress, device.port, tcpProbeTimeoutMs(device));
   await commLog(device.id, "TCP_PROBE", tcp.ok, tcp.ok ? `TCP open in ${tcp.latencyMs}ms` : tcp.error ?? "TCP failed", {
     ...tcp,
   });
 
   if (!tcp.ok) {
+    // Over the VPN the hint names the broken hop; without it every failure reads the same.
+    const message = [tcp.error ?? "TCP probe failed", tcp.hint].filter(Boolean).join(" — ");
     await prisma.device.update({
       where: { id: device.id },
-      data: { status: "OFFLINE", lastError: tcp.error ?? "TCP probe failed" },
+      data: { status: "OFFLINE", lastError: message },
     });
     return {
       tcp,
@@ -77,7 +110,7 @@ export async function testDeviceConnection(device: Device) {
       info: null as DeviceInfo | null,
       connected: false,
       elapsedMs: Date.now() - started,
-      message: tcp.error ?? "TCP probe failed",
+      message,
     };
   }
 

@@ -65,9 +65,20 @@ If the K50A has a **Cloud / ADMS** menu and internet access, the device pushes p
 
 Full steps: **[ADMS-CLOUD-PUSH.md](./ADMS-CLOUD-PUSH.md)**
 
-If there is **no** ADMS/Cloud menu on the device, Option A is impossible — use Option B.
+If there is **no** ADMS/Cloud menu on the device, Option A is impossible — use Option B or C.
 
-### Option B — Mini PC always on + Vercel website
+### Option B — VPS + OpenVPN to the office router (in use)
+
+The VPS dials into the Archer C6 over OpenVPN and reaches the K50A on the office
+LAN. No office PC, no mini PC — the only office hardware is the router and the
+terminal. This is the deployment running at `atfs.7airtravels.com`.
+
+Full steps: **[VPS-VPN-DEPLOYMENT.md](./VPS-VPN-DEPLOYMENT.md)**
+
+Requires the office WAN to have a public IP (static or DDNS). Behind CGNAT,
+reverse the tunnel direction — see that doc.
+
+### Option C — Mini PC always on + Vercel website
 
 | Piece | Best choice | Why |
 | --- | --- | --- |
@@ -77,9 +88,9 @@ If there is **no** ADMS/Cloud menu on the device, Option A is impossible — use
 
 ### Why not “Vercel only” without ADMS?
 
-A LAN-only K50A cannot be reached by Vercel. Then you need Option B.
+A LAN-only K50A cannot be reached by Vercel. Then you need Option B (tunnel) or Option C (office PC).
 
-### What to buy / use (Option B)
+### What to buy / use (Option C)
 
 1. Cheap **mini PC** (or spare desktop) — leave it **always powered on** (disable Sleep/Hibernate).
 2. Ethernet/Wi‑Fi same network as K50A (`192.168.0.x`).
@@ -118,9 +129,9 @@ If the K50A has a **Cloud / ADMS** menu and internet, use push to Vercel instead
 
 If the device has **no** ADMS menu, cloud-only is impossible — use the mini PC / worker path above.
 
-## Always-on office worker (required)
+## Always-on office worker (Option C only)
 
-The K50A is on the **office LAN**. Vercel (cloud) cannot reach it. Something in the office must run the sync worker 24/7.
+The K50A is on the **office LAN**. A cloud host cannot reach it directly. With Option C, something in the office must run the sync worker 24/7. With Option B the VPS runs the worker and reaches the LAN through the VPN tunnel instead.
 
 **This is normal for biometric devices** — not a Vercel bug.
 
@@ -171,8 +182,8 @@ If you close that window, fingerprint → SMS stops until the worker runs again.
 
 Terminate TLS at nginx or Caddy. Forward:
 
-- `/` → web `:3000`
-- `/socket.io` → worker `:3001`
+- `/` → web `:3000` (`:3010` on the shared 7 Air Travels VPS)
+- `/socket.io` → worker `:3001` (`:3011` on that VPS)
 
 Set:
 
