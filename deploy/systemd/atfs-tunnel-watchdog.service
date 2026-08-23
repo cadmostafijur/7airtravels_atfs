@@ -1,0 +1,7 @@
+[Unit]
+Description=ATFS VPN tunnel watchdog (restart OpenVPN when the K50A is unreachable)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/var/www/atfs/deploy/tunnel-watchdog.sh

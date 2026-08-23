@@ -1,0 +1,52 @@
+# OpenVPN client on the VPS -> Archer C6 VPN server (office).
+#
+# The Archer C6 web UI (Advanced -> VPN Server -> OpenVPN) generates a .ovpn
+# file. Export it, copy it to the VPS as /etc/openvpn/client/atfs.conf, then
+# apply the additions marked "ATFS" below. This file documents the result.
+#
+#   systemctl enable --now openvpn-client@atfs
+#   systemctl status openvpn-client@atfs
+#
+# The unit name must match the filename: atfs.conf -> openvpn-client@atfs.
+
+client
+dev tun
+proto udp                       # Archer C6 default; use tcp if you changed it
+remote OFFICE_PUBLIC_IP_OR_DDNS 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+remote-cert-tls server
+cipher AES-128-CBC
+verb 3
+
+# --- ATFS additions -------------------------------------------------------
+# Reconnect quickly and keep the tunnel alive. Without this a dropped tunnel
+# can sit dead for minutes and attendance SMS silently stops.
+keepalive 10 60
+ping-timer-rem
+persist-remote-ip
+
+# The Archer C6 does not push a route for its own LAN in every firmware.
+# Add it explicitly so 192.168.0.0/24 goes down the tunnel.
+route 192.168.0.0 255.255.255.0
+
+# Only office LAN traffic goes through the VPN. Never pull a default route —
+# that would push the whole VPS (including the public website) through the
+# office internet connection.
+route-nopull
+
+# Log to the journal rather than a file so `journalctl -u openvpn-client@atfs`
+# is the single place to look.
+# --------------------------------------------------------------------------
+
+<ca>
+# ... from the router's exported .ovpn
+</ca>
+<cert>
+# ... from the router's exported .ovpn
+</cert>
+<key>
+# ... from the router's exported .ovpn
+</key>
