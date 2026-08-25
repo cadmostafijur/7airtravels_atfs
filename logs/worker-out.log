@@ -241,3 +241,285 @@ E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
   41 try {
 → 42   const inserted = await prisma.attendance.create(
 Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+{"ts":"2026-08-25T10:45:34.931Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":19,"recordsInserted":0,"recordsSkipped":19,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+prisma:error 
+Invalid `prisma.attendance.create()` invocation in
+E:\7airtravels_atfs\src\lib\attendance\sync.ts:42:46
+
+  39 };
+  40 
+  41 try {
+→ 42   const inserted = await prisma.attendance.create(
+Unique constraint failed on the fields: (`deviceId`,`deviceUserId`,`timestamp`)
+{"ts":"2026-08-25T10:47:04.171Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":19,"recordsInserted":0,"recordsSkipped":19,"recordsFailed":0,"status":"SUCCESS"}
