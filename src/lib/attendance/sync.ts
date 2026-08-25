@@ -15,6 +15,7 @@ export type IngestResult = {
   inserted: Attendance | null;
   skipped: boolean;
   failed?: string;
+  linked?: boolean;
 };
 
 export async function ingestAttendanceLog(input: {
@@ -22,14 +23,52 @@ export async function ingestAttendanceLog(input: {
   log: DeviceAttendanceLog;
   source?: AttendanceSource;
 }): Promise<IngestResult> {
+  const deviceUserId = String(input.log.deviceUserId);
   const employee = await prisma.employee.findFirst({
-    where: { deviceUserId: String(input.log.deviceUserId) },
+    where: { deviceUserId },
   });
+
+  const existing = await prisma.attendance.findFirst({
+    where: {
+      deviceId: input.device.id,
+      deviceUserId,
+      timestamp: input.log.timestamp,
+    },
+  });
+
+  if (existing) {
+    // Punch already in DB — if employee was mapped later, link + update daily register + SMS
+    if (!existing.employeeId && employee) {
+      const updated = await prisma.attendance.update({
+        where: { id: existing.id },
+        data: { employeeId: employee.id },
+      });
+      const summary = await processDailySummary(employee.id, updated.timestamp);
+      const refreshed = (await prisma.attendance.findUnique({ where: { id: updated.id } })) ?? updated;
+      try {
+        await notifyAttendanceSms(refreshed, employee, summary);
+      } catch (error) {
+        logger.error("sms_after_attendance_failed", { error: String(error) });
+      }
+      await publishAttendance({
+        id: refreshed.id,
+        employee: employee.name,
+        employeeCode: employee.employeeCode ?? null,
+        deviceUserId: refreshed.deviceUserId,
+        timestamp: refreshed.timestamp.toISOString(),
+        status: summary?.status ?? "UNKNOWN",
+        device: input.device.name,
+        verificationMethod: refreshed.verificationMethod,
+      });
+      return { inserted: refreshed, skipped: false, linked: true };
+    }
+    return { inserted: null, skipped: true };
+  }
 
   const payload: Prisma.AttendanceUncheckedCreateInput = {
     employeeId: employee?.id,
     deviceId: input.device.id,
-    deviceUserId: String(input.log.deviceUserId),
+    deviceUserId,
     deviceTransactionId: input.log.deviceTransactionId ?? undefined,
     timestamp: input.log.timestamp,
     attendanceType: input.log.attendanceType ?? "UNKNOWN",

@@ -4,6 +4,7 @@ import { jsonError, jsonOk, readJson, clientIp } from "@/lib/http";
 import { requireApiSession } from "@/lib/auth/guards";
 import { writeAudit } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
+import { linkOrphanAttendances } from "@/lib/attendance/link-orphans";
 
 const schema = z.object({
   employeeCode: z.string().min(2).optional(),
@@ -65,6 +66,7 @@ export async function PUT(request: Request, context: Ctx) {
       ipAddress: clientIp(request),
       metadata: body,
     });
+    await linkOrphanAttendances(employee.id, employee.deviceUserId);
     return jsonOk(employee);
   } catch (error) {
     return jsonError(error);

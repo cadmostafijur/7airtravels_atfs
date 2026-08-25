@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, readJson, clientIp } from "@/lib/http";
 import { requireApiSession } from "@/lib/auth/guards";
 import { writeAudit } from "@/lib/audit";
+import { linkOrphanAttendances } from "@/lib/attendance/link-orphans";
 
 const schema = z.object({
   employeeCode: z.string().min(2),
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       entityId: employee.id,
       ipAddress: clientIp(request),
     });
+    await linkOrphanAttendances(employee.id, employee.deviceUserId);
     return jsonOk(employee, 201);
   } catch (error) {
     return jsonError(error);

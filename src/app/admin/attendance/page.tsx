@@ -68,8 +68,12 @@ export default function AttendancePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Dept[]>([]);
   const [me, setMe] = useState<Me | null>(null);
-  const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date()),
+  );
+  const [to, setTo] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date()),
+  );
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [employeeId, setEmployeeId] = useState("");
