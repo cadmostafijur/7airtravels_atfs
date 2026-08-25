@@ -122,7 +122,9 @@ model Employee {
   designation    String?
   deviceUserId   String
   status         AccountStatus            @default(ACTIVE)
-  joinedAt       DateTime                 @default(now())
+  joinedAt       DateTime?
+  nidNumber      String?
+  nidDocumentUrl String?
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
   department     Department?              @relation(fields: [departmentId], references: [id])

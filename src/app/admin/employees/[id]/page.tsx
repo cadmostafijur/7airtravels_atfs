@@ -23,7 +23,9 @@ type Employee = {
   designation: string | null;
   deviceUserId: string;
   status: string;
-  joinedAt: string;
+  joinedAt: string | null;
+  nidNumber: string | null;
+  nidDocumentUrl: string | null;
   departmentId: string | null;
   department: { name: string } | null;
   summaries: Array<{
@@ -55,6 +57,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     departmentId: "",
     status: "ACTIVE",
     joinedAt: "",
+    nidNumber: "",
+    nidDocumentUrl: "",
   });
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
@@ -74,7 +78,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       deviceUserId: data.deviceUserId,
       departmentId: data.departmentId ?? "",
       status: data.status,
-      joinedAt: data.joinedAt.slice(0, 10),
+      joinedAt: data.joinedAt ? data.joinedAt.slice(0, 10) : "",
+      nidNumber: data.nidNumber ?? "",
+      nidDocumentUrl: data.nidDocumentUrl ?? "",
     });
   }
 
@@ -90,12 +96,28 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           ...form,
           email: form.email || null,
           departmentId: form.departmentId || null,
+          joinedAt: form.joinedAt || null,
+          nidNumber: form.nidNumber || null,
+          nidDocumentUrl: form.nidDocumentUrl || null,
         }),
       });
       toast.success("Saved");
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed");
+    }
+  }
+
+  async function uploadNid(file: File | null) {
+    if (!file) return;
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      const result = await api<{ url: string }>("/api/uploads/nid", { method: "POST", body: data });
+      setForm((prev) => ({ ...prev, nidDocumentUrl: result.url }));
+      toast.success("NID file uploaded — click Save to keep it");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload failed");
     }
   }
 
@@ -200,8 +222,40 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               </Select>
             </div>
             <div>
-              <Label>Joining date</Label>
+              <Label>Joining date (optional)</Label>
               <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
+            </div>
+            <div>
+              <Label>NID number (optional)</Label>
+              <Input
+                placeholder="National ID number"
+                value={form.nidNumber}
+                onChange={(e) => setForm({ ...form, nidNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>NID upload (optional)</Label>
+              <Input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => void uploadNid(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-xs text-muted">JPG, PNG, WEBP, or PDF · max 5 MB</p>
+              {form.nidDocumentUrl ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <a className="text-xs font-semibold text-teal hover:underline" href={form.nidDocumentUrl} target="_blank" rel="noreferrer">
+                    View NID file
+                  </a>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => setForm({ ...form, nidDocumentUrl: "" })}
+                  >
+                    Remove file
+                  </Button>
+                </div>
+              ) : null}
             </div>
             <div>
               <Label>Device user ID</Label>

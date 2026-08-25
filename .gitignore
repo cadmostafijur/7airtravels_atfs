@@ -41,6 +41,9 @@ yarn-error.log*
 # local simulation device store
 .data/
 
+# employee NID uploads
+/public/uploads/
+
 # vercel
 .vercel
 

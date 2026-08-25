@@ -13,7 +13,9 @@ const schema = z.object({
   designation: z.string().optional(),
   deviceUserId: z.string().min(1),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
-  joinedAt: z.string().optional(),
+  joinedAt: z.string().optional().nullable().or(z.literal("")),
+  nidNumber: z.string().optional().nullable().or(z.literal("")),
+  nidDocumentUrl: z.string().optional().nullable().or(z.literal("")),
 });
 
 export async function GET(request: Request) {
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
                 { name: { contains: q, mode: "insensitive" } },
                 { employeeCode: { contains: q, mode: "insensitive" } },
                 { deviceUserId: { contains: q } },
+                { nidNumber: { contains: q, mode: "insensitive" } },
               ],
             }
           : {}),
@@ -52,9 +55,17 @@ export async function POST(request: Request) {
     const body = schema.parse(await readJson(request));
     const employee = await prisma.employee.create({
       data: {
-        ...body,
+        employeeCode: body.employeeCode,
+        name: body.name,
+        phone: body.phone || null,
         email: body.email || null,
-        joinedAt: body.joinedAt ? new Date(body.joinedAt) : undefined,
+        departmentId: body.departmentId || null,
+        designation: body.designation || null,
+        deviceUserId: body.deviceUserId,
+        status: body.status,
+        joinedAt: body.joinedAt ? new Date(body.joinedAt) : null,
+        nidNumber: body.nidNumber?.trim() || null,
+        nidDocumentUrl: body.nidDocumentUrl?.trim() || null,
       },
     });
     await writeAudit({

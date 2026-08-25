@@ -21,7 +21,9 @@ type Employee = {
   deviceUserId: string;
   status: string;
   designation: string | null;
-  joinedAt: string;
+  joinedAt: string | null;
+  nidNumber: string | null;
+  nidDocumentUrl: string | null;
   department: { name: string } | null;
 };
 
@@ -35,7 +37,9 @@ const emptyForm = {
   deviceUserId: "",
   departmentId: "",
   designation: "",
-  joinedAt: new Date().toISOString().slice(0, 10),
+  joinedAt: "",
+  nidNumber: "",
+  nidDocumentUrl: "",
 };
 
 export default function EmployeesPage() {
@@ -68,13 +72,32 @@ export default function EmployeesPage() {
     try {
       await api("/api/employees", {
         method: "POST",
-        body: JSON.stringify({ ...form, departmentId: form.departmentId || null }),
+        body: JSON.stringify({
+          ...form,
+          departmentId: form.departmentId || null,
+          joinedAt: form.joinedAt || null,
+          nidNumber: form.nidNumber || null,
+          nidDocumentUrl: form.nidDocumentUrl || null,
+        }),
       });
       toast.success("Employee created");
       setForm(emptyForm);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed");
+    }
+  }
+
+  async function uploadNid(file: File | null) {
+    if (!file) return;
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      const result = await api<{ url: string }>("/api/uploads/nid", { method: "POST", body: data });
+      setForm((prev) => ({ ...prev, nidDocumentUrl: result.url }));
+      toast.success("NID file uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload failed");
     }
   }
 
@@ -204,6 +227,11 @@ export default function EmployeesPage() {
                     <td className="px-5 py-3 font-mono">{row.deviceUserId}</td>
                     <td className="px-5 py-3">
                       <Badge tone={row.status === "ACTIVE" ? "ok" : "muted"}>{row.status}</Badge>
+                      {row.nidDocumentUrl ? (
+                        <a className="mt-1 block text-xs text-teal hover:underline" href={row.nidDocumentUrl} target="_blank" rel="noreferrer">
+                          NID file
+                        </a>
+                      ) : null}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap gap-2">
@@ -267,8 +295,30 @@ export default function EmployeesPage() {
               </Select>
             </div>
             <div>
-              <Label>Joining date</Label>
+              <Label>Joining date (optional)</Label>
               <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
+            </div>
+            <div>
+              <Label>NID number (optional)</Label>
+              <Input
+                placeholder="National ID number"
+                value={form.nidNumber}
+                onChange={(e) => setForm({ ...form, nidNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>NID upload (optional)</Label>
+              <Input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => void uploadNid(e.target.files?.[0] ?? null)}
+              />
+              <p className="mt-1 text-xs text-muted">JPG, PNG, WEBP, or PDF · max 5 MB</p>
+              {form.nidDocumentUrl ? (
+                <a className="mt-1 inline-block text-xs font-semibold text-teal hover:underline" href={form.nidDocumentUrl} target="_blank" rel="noreferrer">
+                  View uploaded NID
+                </a>
+              ) : null}
             </div>
             <Button onClick={create}>Create employee</Button>
           </CardContent>
