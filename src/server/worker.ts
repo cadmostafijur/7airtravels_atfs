@@ -41,7 +41,17 @@ async function deviceReachability() {
 }
 
 async function syncAllDevices() {
-  const devices = await prisma.device.findMany();
+  let devices;
+  try {
+    devices = await prisma.device.findMany();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    lastSyncAt = new Date();
+    lastSyncOk = false;
+    lastSyncError = message;
+    logger.warn("scheduled_sync_db_unavailable", { error: message });
+    return;
+  }
   lastSyncAt = new Date();
   for (const device of devices) {
     if (syncing.has(device.id)) continue;
