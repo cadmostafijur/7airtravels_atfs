@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SmsSetting" ADD COLUMN IF NOT EXISTS "adminPhones" JSONB NOT NULL DEFAULT '[]';

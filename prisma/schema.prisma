@@ -257,6 +257,8 @@ model SmsSetting {
   adminPhone1        String?
   adminPhone2        String?
   adminPhone3        String?
+  /// Extra admin SMS numbers beyond 1–3 (JSON string array).
+  adminPhones        Json     @default("[]")
   notifyOnAttendance Boolean  @default(true)
   notifyOnLate       Boolean  @default(true)
   createdAt          DateTime @default(now())

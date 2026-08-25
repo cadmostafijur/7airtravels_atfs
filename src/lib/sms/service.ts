@@ -12,11 +12,22 @@ function phonesFrom(settings: {
   adminPhone1: string | null;
   adminPhone2: string | null;
   adminPhone3: string | null;
+  adminPhones?: unknown;
 }): string[] {
-  return [settings.adminPhone1, settings.adminPhone2, settings.adminPhone3]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-    .map(normalizeBdPhone);
+  const extras = Array.isArray(settings.adminPhones)
+    ? settings.adminPhones.map((value) => (typeof value === "string" ? value : "")).filter(Boolean)
+    : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [settings.adminPhone1, settings.adminPhone2, settings.adminPhone3, ...extras]) {
+    const trimmed = raw?.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeBdPhone(trimmed);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
 }
 
 function statusLabel(status: string): string {

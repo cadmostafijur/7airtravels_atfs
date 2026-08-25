@@ -26,6 +26,7 @@ type Settings = {
   adminPhone1: string | null;
   adminPhone2: string | null;
   adminPhone3: string | null;
+  adminPhones?: string[];
   notifyOnAttendance: boolean;
   notifyOnLate: boolean;
   gateway?: GatewayInfo;
@@ -41,8 +42,27 @@ type Log = {
   providerResponse: string | null;
 };
 
+function phonesFromSettings(s: Settings): string[] {
+  const extras = Array.isArray(s.adminPhones) ? s.adminPhones : [];
+  const list = [s.adminPhone1, s.adminPhone2, s.adminPhone3, ...extras]
+    .map((v) => (v ?? "").trim())
+    .filter(Boolean);
+  return list.length ? list : [""];
+}
+
+function splitPhones(phones: string[]) {
+  const cleaned = phones.map((p) => p.trim()).filter(Boolean);
+  return {
+    adminPhone1: cleaned[0] ?? null,
+    adminPhone2: cleaned[1] ?? null,
+    adminPhone3: cleaned[2] ?? null,
+    adminPhones: cleaned.slice(3),
+  };
+}
+
 export default function SmsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [phones, setPhones] = useState<string[]>([""]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [testPhone, setTestPhone] = useState("");
   const [confirm, setConfirm] = useState<ConfirmState>(null);
@@ -55,6 +75,7 @@ export default function SmsPage() {
       api<{ online: boolean; hint: string; syncIntervalMs: number }>("/api/worker/status").catch(() => null),
     ]);
     setSettings(s);
+    setPhones(phonesFromSettings(s));
     setLogs(l);
     if (w) setWorker(w);
   }
@@ -65,8 +86,15 @@ export default function SmsPage() {
   async function save() {
     if (!settings) return;
     try {
-      const { gateway: _gateway, ...payload } = settings;
-      await api("/api/sms/settings", { method: "PUT", body: JSON.stringify(payload) });
+      const { gateway: _gateway, ...rest } = settings;
+      const split = splitPhones(phones);
+      await api("/api/sms/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...rest,
+          ...split,
+        }),
+      });
       toast.success("SMS settings saved");
       await load();
     } catch (error) {
@@ -259,26 +287,45 @@ export default function SmsPage() {
               />
               Also notify when status is Late
             </label>
-            <div>
-              <Label>Admin SMS number 1</Label>
-              <Input
-                value={settings.adminPhone1 ?? ""}
-                onChange={(e) => setSettings({ ...settings, adminPhone1: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Admin SMS number 2</Label>
-              <Input
-                value={settings.adminPhone2 ?? ""}
-                onChange={(e) => setSettings({ ...settings, adminPhone2: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Admin SMS number 3</Label>
-              <Input
-                value={settings.adminPhone3 ?? ""}
-                onChange={(e) => setSettings({ ...settings, adminPhone3: e.target.value })}
-              />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="mb-0">Admin SMS numbers</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={phones.length >= 20}
+                  onClick={() => setPhones((prev) => [...prev, ""])}
+                >
+                  Add number
+                </Button>
+              </div>
+              {phones.map((phone, index) => (
+                <div key={`sms-phone-${index}`} className="flex gap-2">
+                  <div className="flex-1">
+                    <Label>Admin SMS number {index + 1}</Label>
+                    <Input
+                      placeholder="01XXXXXXXXX or 8801XXXXXXXXX"
+                      value={phone}
+                      onChange={(e) =>
+                        setPhones((prev) => prev.map((value, i) => (i === index ? e.target.value : value)))
+                      }
+                    />
+                  </div>
+                  {phones.length > 1 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-6"
+                      onClick={() => setPhones((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+              <p className="text-xs text-muted">Up to 20 numbers. Each fingerprint alert is sent to all saved numbers.</p>
             </div>
             <Button onClick={() => void save()}>Save SMS settings</Button>
             <div className="pt-4">
