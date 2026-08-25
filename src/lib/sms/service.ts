@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createSmsProvider } from "@/lib/sms/provider";
 import { normalizeBdPhone } from "@/lib/sms/phone";
 import { env } from "@/lib/env";
-import { formatDate, formatTime } from "@/lib/time";
+import { formatDate, formatTime, workDateKey } from "@/lib/time";
 import { logger } from "@/lib/logger";
 import type { Attendance, DailyAttendanceSummary, Employee } from "@prisma/client";
 
@@ -97,8 +97,11 @@ export async function notifyAttendanceSms(
       return;
     }
 
+    // Skip multi-day history floods, but always allow same Dhaka calendar-day punches
+    // (worker downtime often syncs morning punches >60 minutes later).
     const ageMinutes = (Date.now() - attendance.timestamp.getTime()) / 60_000;
-    if (ageMinutes > env.sms.maxPunchAgeMinutes) {
+    const sameWorkDay = workDateKey(attendance.timestamp) === workDateKey(new Date());
+    if (!sameWorkDay && ageMinutes > env.sms.maxPunchAgeMinutes) {
       logger.info("sms_skipped_punch_too_old", {
         attendanceId: attendance.id,
         ageMinutes: Math.round(ageMinutes),
