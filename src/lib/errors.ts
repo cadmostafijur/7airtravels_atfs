@@ -25,7 +25,31 @@ export class AuthError extends AppError {
 
 export function publicErrorMessage(error: unknown): string {
   if (error instanceof AppError) return error.message;
+
+  // Zod validation — show a clear field message, never "connection parameters"
+  if (error && typeof error === "object" && "issues" in error) {
+    const issues = (error as { issues?: Array<{ path?: unknown[]; message?: string }> }).issues;
+    if (Array.isArray(issues) && issues.length) {
+      const first = issues[0];
+      const field = Array.isArray(first.path) ? first.path.join(".") : "";
+      const msg = first.message ?? "Invalid input";
+      return field ? `${field}: ${msg}` : msg;
+    }
+  }
+
   if (error instanceof Error) {
+    if (error.name === "ZodError" || error.message.includes('"code": "invalid_')) {
+      try {
+        const parsed = JSON.parse(error.message) as Array<{ path?: unknown[]; message?: string }>;
+        if (Array.isArray(parsed) && parsed[0]) {
+          const field = Array.isArray(parsed[0].path) ? parsed[0].path.join(".") : "";
+          const msg = parsed[0].message ?? "Invalid input";
+          return field ? `${field}: ${msg}` : msg;
+        }
+      } catch {
+        return "Please check the form fields and try again.";
+      }
+    }
     if (error.message.includes("ECONNREFUSED")) return "Connection refused. Check IP, port, and LAN reachability.";
     if (error.message.includes("TIMEOUT") || error.message.includes("timed out") || error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
       return "Connection timed out. Close K50A menus (home screen), keep Ethernet connected, then retry Sync. Timeout is 60 seconds.";
@@ -33,7 +57,7 @@ export function publicErrorMessage(error: unknown): string {
     if (error.message.includes("ENETUNREACH") || error.message.includes("EHOSTUNREACH")) {
       return "Host unreachable. Confirm the device is on the same LAN or VPN.";
     }
-    if (error.message.includes("EINVAL") || error.message.includes("Invalid")) {
+    if (error.message.includes("EINVAL")) {
       return "Invalid connection parameters.";
     }
     if (error.message.includes("subarray")) {

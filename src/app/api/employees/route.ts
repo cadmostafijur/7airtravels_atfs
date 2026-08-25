@@ -7,15 +7,15 @@ import { writeAudit } from "@/lib/audit";
 const schema = z.object({
   employeeCode: z.string().min(2),
   name: z.string().min(2),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional().nullable(),
+  email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
   departmentId: z.string().optional().nullable(),
-  designation: z.string().optional(),
+  designation: z.string().optional().nullable(),
   deviceUserId: z.string().min(1),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
-  joinedAt: z.string().optional().nullable().or(z.literal("")),
-  nidNumber: z.string().optional().nullable().or(z.literal("")),
-  nidDocumentUrl: z.string().optional().nullable().or(z.literal("")),
+  joinedAt: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  nidNumber: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  nidDocumentUrl: z.union([z.string(), z.literal(""), z.null()]).optional(),
 });
 
 export async function GET(request: Request) {

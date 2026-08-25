@@ -24,6 +24,7 @@ type Employee = {
   joinedAt: string | null;
   nidNumber: string | null;
   nidDocumentUrl: string | null;
+  departmentId: string | null;
   department: { name: string } | null;
 };
 
@@ -89,6 +90,7 @@ export default function EmployeesPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [status, setStatus] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [employeeOpen, setEmployeeOpen] = useState(false);
   const [deptOpen, setDeptOpen] = useState(false);
   const [deptName, setDeptName] = useState("");
@@ -114,35 +116,69 @@ export default function EmployeesPage() {
   }, []);
 
   function openAddEmployee() {
+    setEditingId(null);
     setForm(emptyForm);
     setEmployeeOpen(true);
   }
 
-  async function createEmployee() {
+  async function openEditEmployee(row: Employee) {
+    try {
+      const data = await api<Employee>(`/api/employees/${row.id}`);
+      setEditingId(data.id);
+      setForm({
+        employeeCode: data.employeeCode,
+        name: data.name,
+        phone: data.phone ?? "",
+        email: data.email ?? "",
+        deviceUserId: data.deviceUserId,
+        departmentId: data.departmentId ?? "",
+        designation: data.designation ?? "",
+        joinedAt: data.joinedAt ? data.joinedAt.slice(0, 10) : "",
+        nidNumber: data.nidNumber ?? "",
+        nidDocumentUrl: data.nidDocumentUrl ?? "",
+        status: data.status,
+      });
+      setEmployeeOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load employee");
+    }
+  }
+
+  async function saveEmployee() {
     if (!form.employeeCode.trim() || !form.name.trim() || !form.deviceUserId.trim()) {
       toast.error("Employee ID, Name, and K50A User ID are required");
       return;
     }
     setSaving(true);
+    const payload = {
+      employeeCode: form.employeeCode.trim(),
+      name: form.name.trim(),
+      phone: form.phone.trim() || "",
+      email: form.email.trim() || "",
+      deviceUserId: form.deviceUserId.trim(),
+      departmentId: form.departmentId || null,
+      designation: form.designation.trim() || "",
+      status: form.status,
+      joinedAt: form.joinedAt || null,
+      nidNumber: form.nidNumber.trim() || null,
+      nidDocumentUrl: form.nidDocumentUrl || null,
+    };
     try {
-      await api("/api/employees", {
-        method: "POST",
-        body: JSON.stringify({
-          employeeCode: form.employeeCode.trim(),
-          name: form.name.trim(),
-          phone: form.phone || null,
-          email: form.email || null,
-          deviceUserId: form.deviceUserId.trim(),
-          departmentId: form.departmentId || null,
-          designation: form.designation || null,
-          status: form.status,
-          joinedAt: form.joinedAt || null,
-          nidNumber: form.nidNumber || null,
-          nidDocumentUrl: form.nidDocumentUrl || null,
-        }),
-      });
-      toast.success("Employee created");
+      if (editingId) {
+        await api(`/api/employees/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        toast.success("Employee updated");
+      } else {
+        await api("/api/employees", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        toast.success("Employee created");
+      }
       setForm(emptyForm);
+      setEditingId(null);
       setEmployeeOpen(false);
       await load();
     } catch (error) {
@@ -231,9 +267,16 @@ export default function EmployeesPage() {
 
       <ModalShell
         open={employeeOpen}
-        title="Add employee"
-        description="Fill in employee details. NID file is optional and stored with the employee record."
-        onClose={() => setEmployeeOpen(false)}
+        title={editingId ? "Edit employee" : "Add employee"}
+        description={
+          editingId
+            ? "Update employee details. NID file is optional and stored with the employee record."
+            : "Fill in employee details. NID file is optional and stored with the employee record."
+        }
+        onClose={() => {
+          setEmployeeOpen(false);
+          setEditingId(null);
+        }}
         wide
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -331,11 +374,18 @@ export default function EmployeesPage() {
           </div>
         </div>
         <div className="mt-6 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setEmployeeOpen(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setEmployeeOpen(false);
+              setEditingId(null);
+            }}
+          >
             Cancel
           </Button>
-          <Button type="button" disabled={saving} onClick={() => void createEmployee()}>
-            {saving ? "Saving…" : "Save employee"}
+          <Button type="button" disabled={saving} onClick={() => void saveEmployee()}>
+            {saving ? "Saving…" : editingId ? "Update employee" : "Save employee"}
           </Button>
         </div>
       </ModalShell>
@@ -467,6 +517,9 @@ export default function EmployeesPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => void openEditEmployee(row)}>
+                        Edit
+                      </Button>
                       {row.status === "ACTIVE" ? (
                         <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
                           Deactivate

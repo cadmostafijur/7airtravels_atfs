@@ -94,7 +94,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         method: "PUT",
         body: JSON.stringify({
           ...form,
-          email: form.email || null,
+          email: form.email || "",
+          phone: form.phone || "",
           departmentId: form.departmentId || null,
           joinedAt: form.joinedAt || null,
           nidNumber: form.nidNumber || null,

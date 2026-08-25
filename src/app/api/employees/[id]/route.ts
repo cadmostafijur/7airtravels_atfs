@@ -9,14 +9,14 @@ const schema = z.object({
   employeeCode: z.string().min(2).optional(),
   name: z.string().min(2).optional(),
   phone: z.string().nullable().optional(),
-  email: z.string().email().optional().or(z.literal("")).nullable(),
+  email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
   departmentId: z.string().nullable().optional(),
   designation: z.string().nullable().optional(),
   deviceUserId: z.string().min(1).optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
-  joinedAt: z.string().optional().nullable().or(z.literal("")),
-  nidNumber: z.string().optional().nullable().or(z.literal("")),
-  nidDocumentUrl: z.string().optional().nullable().or(z.literal("")),
+  joinedAt: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  nidNumber: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  nidDocumentUrl: z.union([z.string(), z.literal(""), z.null()]).optional(),
 });
 
 type Ctx = { params: Promise<{ id: string }> };
