@@ -31,7 +31,7 @@ if ($existing) {
 }
 
 $action = New-ScheduledTaskAction -Execute $nodeExe -Argument $arguments -WorkingDirectory $repoRoot
-# Boot time — does not wait for someone to open Windows desktop
+# Boot time - does not wait for someone to open Windows desktop
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
@@ -58,7 +58,7 @@ Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 
 Write-Host ""
-Write-Host "OK — worker task installed (starts when PC powers on)." -ForegroundColor Green
+Write-Host "OK - worker task installed (starts when PC powers on)." -ForegroundColor Green
 Write-Host "Check: http://127.0.0.1:3001/health"
 Write-Host ""
 Write-Host "IMPORTANT: keep this PC powered ON. If PC is off, SMS stops."
