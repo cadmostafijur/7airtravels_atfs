@@ -73,6 +73,8 @@ async function syncAllDevices() {
 }
 
 async function main() {
+  process.env.ATFS_IS_WORKER = "true";
+
   const io = new Server({
     cors: {
       origin: env.appUrl,

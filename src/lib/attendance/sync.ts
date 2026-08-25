@@ -191,10 +191,18 @@ export async function syncDeviceAttendance(deviceId: string) {
         errorMessage,
       },
     });
-    await db.device.update({
-      where: { id: device.id },
-      data: { status: "OFFLINE", lastError: errorMessage },
-    });
+    if (process.env.ATFS_IS_WORKER === "true") {
+      await db.device.update({
+        where: { id: device.id },
+        data: { status: "OFFLINE", lastError: errorMessage },
+      });
+    } else {
+      logger.warn("skip_offline_status_from_web", {
+        deviceId: device.id,
+        error: errorMessage,
+        hint: "K50A is LAN-only. Office worker status is the source of truth.",
+      });
+    }
     throw new DeviceError(errorMessage, extractDeviceErrorMessage(error));
   }
   });

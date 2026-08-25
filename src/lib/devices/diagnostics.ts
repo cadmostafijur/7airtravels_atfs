@@ -9,6 +9,22 @@ import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
 import { logger } from "@/lib/logger";
 import type { Device, Prisma } from "@prisma/client";
 
+/** Website/VPS cannot reach the office K50A — only the LAN worker may mark OFFLINE. */
+async function markDeviceOffline(deviceId: string, message: string) {
+  if (process.env.ATFS_IS_WORKER !== "true") {
+    logger.warn("skip_offline_status_from_web", {
+      deviceId,
+      message,
+      hint: "K50A is LAN-only. Office worker status is the source of truth.",
+    });
+    return;
+  }
+  await prisma.device.update({
+    where: { id: deviceId },
+    data: { status: "OFFLINE", lastError: message },
+  });
+}
+
 async function commLog(
   deviceId: string,
   action: string,
@@ -50,10 +66,7 @@ export async function withDevice<T>(
     const reachable = await probeTcp(device.ipAddress, device.port, tcpProbeTimeoutMs(device));
     if (!reachable.ok) {
       const message = [reachable.error ?? "TCP probe failed", reachable.hint].filter(Boolean).join(" — ");
-      await prisma.device.update({
-        where: { id: device.id },
-        data: { status: "OFFLINE", lastError: message },
-      });
+      await markDeviceOffline(device.id, message);
       await commLog(device.id, "TCP_PREFLIGHT", false, message, { ...reachable });
       throw new DeviceError(
         `K50A unreachable at ${device.ipAddress}:${device.port}. ${reachable.hint ?? ""}`.trim(),
@@ -73,10 +86,7 @@ export async function withDevice<T>(
     await adapter.connect();
   } catch (error) {
     const message = extractDeviceErrorMessage(error, publicErrorMessage(error));
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { status: "OFFLINE", lastError: message },
-    });
+    await markDeviceOffline(device.id, message);
     throw error;
   }
   try {
@@ -100,10 +110,7 @@ export async function testDeviceConnection(device: Device) {
   if (!tcp.ok) {
     // Over the VPN the hint names the broken hop; without it every failure reads the same.
     const message = [tcp.error ?? "TCP probe failed", tcp.hint].filter(Boolean).join(" — ");
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { status: "OFFLINE", lastError: message },
-    });
+    await markDeviceOffline(device.id, message);
     return {
       tcp,
       protocol: null as null,
@@ -132,10 +139,7 @@ export async function testDeviceConnection(device: Device) {
     const message = publicErrorMessage(error);
     logger.error("device_test_failed", { deviceId: device.id, message });
     await commLog(device.id, "TEST_CONNECTION", false, message);
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { status: "OFFLINE", lastError: message },
-    });
+    await markDeviceOffline(device.id, message);
     return {
       tcp,
       protocol: null,

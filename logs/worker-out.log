@@ -3,7 +3,22 @@ npm warn Unknown env config "devdir". This will stop working in the next major v
 > 7airtravels_atfs@0.1.0 start:worker
 > tsx --require ./scripts/stub-server-only.cjs src/server/worker.ts
 
-{"ts":"2026-08-25T10:52:39.577Z","level":"info","message":"worker_listening","host":"0.0.0.0","port":3001}
+{"ts":"2026-08-25T11:31:44.973Z","level":"info","message":"worker_listening","host":"0.0.0.0","port":3001}
 ok tcp
-{"ts":"2026-08-25T10:53:47.043Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":21,"recordsInserted":0,"recordsSkipped":21,"recordsFailed":0,"status":"SUCCESS"}
+{"ts":"2026-08-25T11:31:57.777Z","level":"warn","message":"sms_skipped_no_employee","attendanceId":"cmt8l4npi0003fqmkr8tol6ah","deviceUserId":"15"}
+{"ts":"2026-08-25T11:32:01.910Z","level":"warn","message":"sms_skipped_no_employee","attendanceId":"cmt8l4qwn0005fqmkqegsnoaa","deviceUserId":"15"}
+{"ts":"2026-08-25T11:32:58.999Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":23,"recordsInserted":2,"recordsSkipped":21,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:34:54.120Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":23,"recordsInserted":0,"recordsSkipped":23,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:36:20.769Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":23,"recordsInserted":0,"recordsSkipped":23,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:37:53.269Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":23,"recordsInserted":0,"recordsSkipped":23,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:39:24.533Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":23,"recordsInserted":0,"recordsSkipped":23,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:39:54.669Z","level":"warn","message":"sms_skipped_no_employee","attendanceId":"cmt8levl3000hfqmkk5d02lk3","deviceUserId":"15"}
+{"ts":"2026-08-25T11:40:58.669Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":24,"recordsInserted":1,"recordsSkipped":23,"recordsFailed":0,"status":"SUCCESS"}
+ok tcp
+{"ts":"2026-08-25T11:42:28.828Z","level":"info","message":"scheduled_sync","deviceId":"cmt8dnh7d0004cwmz6vhhjd0l","recordsRead":24,"recordsInserted":0,"recordsSkipped":24,"recordsFailed":0,"status":"SUCCESS"}
 ok tcp
