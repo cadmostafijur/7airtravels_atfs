@@ -5,8 +5,16 @@ import { requireApiSession } from "@/lib/auth/guards";
 
 const schema = z.object({
   name: z.string().min(2),
-  code: z.string().min(2).max(12),
+  code: z.string().max(12).optional(),
 });
+
+function codeFromName(name: string): string {
+  const cleaned = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(0, 8);
+  return cleaned.length >= 2 ? cleaned : `DEP${Date.now().toString().slice(-4)}`;
+}
 
 export async function GET(request: Request) {
   try {
@@ -21,9 +29,10 @@ export async function POST(request: Request) {
   try {
     await requireApiSession(request, "employees.write");
     const body = schema.parse(await readJson(request));
+    const code = (body.code?.trim() || codeFromName(body.name)).toUpperCase();
     return jsonOk(
       await prisma.department.create({
-        data: { name: body.name, code: body.code.toUpperCase() },
+        data: { name: body.name.trim(), code },
       }),
       201,
     );

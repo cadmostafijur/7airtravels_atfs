@@ -27,7 +27,7 @@ type Employee = {
   department: { name: string } | null;
 };
 
-type Dept = { id: string; name: string };
+type Dept = { id: string; name: string; code: string };
 
 const emptyForm = {
   employeeCode: "",
@@ -40,7 +40,47 @@ const emptyForm = {
   joinedAt: "",
   nidNumber: "",
   nidDocumentUrl: "",
+  status: "ACTIVE",
 };
+
+function ModalShell({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  wide,
+}: {
+  open: boolean;
+  title: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy/45 p-4 backdrop-blur-[2px] sm:items-center">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={onClose} />
+      <div
+        className={`relative z-10 my-4 w-full rounded-2xl border border-line bg-white p-5 shadow-[0_24px_60px_rgba(6,35,45,0.2)] sm:p-6 ${
+          wide ? "max-w-3xl" : "max-w-lg"
+        }`}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">{title}</h2>
+            {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function EmployeesPage() {
   const [rows, setRows] = useState<Employee[]>([]);
@@ -49,6 +89,11 @@ export default function EmployeesPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [status, setStatus] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const [employeeOpen, setEmployeeOpen] = useState(false);
+  const [deptOpen, setDeptOpen] = useState(false);
+  const [deptName, setDeptName] = useState("");
+  const [deptCode, setDeptCode] = useState("");
+  const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   async function load() {
@@ -68,13 +113,29 @@ export default function EmployeesPage() {
     void load();
   }, []);
 
-  async function create() {
+  function openAddEmployee() {
+    setForm(emptyForm);
+    setEmployeeOpen(true);
+  }
+
+  async function createEmployee() {
+    if (!form.employeeCode.trim() || !form.name.trim() || !form.deviceUserId.trim()) {
+      toast.error("Employee ID, Name, and K50A User ID are required");
+      return;
+    }
+    setSaving(true);
     try {
       await api("/api/employees", {
         method: "POST",
         body: JSON.stringify({
-          ...form,
+          employeeCode: form.employeeCode.trim(),
+          name: form.name.trim(),
+          phone: form.phone || null,
+          email: form.email || null,
+          deviceUserId: form.deviceUserId.trim(),
           departmentId: form.departmentId || null,
+          designation: form.designation || null,
+          status: form.status,
           joinedAt: form.joinedAt || null,
           nidNumber: form.nidNumber || null,
           nidDocumentUrl: form.nidDocumentUrl || null,
@@ -82,9 +143,12 @@ export default function EmployeesPage() {
       });
       toast.success("Employee created");
       setForm(emptyForm);
+      setEmployeeOpen(false);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -95,9 +159,33 @@ export default function EmployeesPage() {
       data.append("file", file);
       const result = await api<{ url: string }>("/api/uploads/nid", { method: "POST", body: data });
       setForm((prev) => ({ ...prev, nidDocumentUrl: result.url }));
-      toast.success("NID file uploaded");
+      toast.success("NID file ready — it will be saved with the employee");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
+    }
+  }
+
+  async function createDepartment() {
+    if (!deptName.trim()) {
+      toast.error("Department name is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await api<Dept>("/api/departments", {
+        method: "POST",
+        body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim() || undefined }),
+      });
+      toast.success(`Department “${created.name}” added`);
+      setDeptName("");
+      setDeptCode("");
+      setDeptOpen(false);
+      await load();
+      setForm((prev) => ({ ...prev, departmentId: created.id }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -140,41 +228,181 @@ export default function EmployeesPage() {
   return (
     <div>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+
+      <ModalShell
+        open={employeeOpen}
+        title="Add employee"
+        description="Fill in employee details. NID file is optional and stored with the employee record."
+        onClose={() => setEmployeeOpen(false)}
+        wide
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Employee ID *</Label>
+            <Input value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} />
+          </div>
+          <div>
+            <Label>Full name *</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <Label>Phone</Label>
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div>
+            <Label>Email</Label>
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div>
+            <Label>K50A User ID *</Label>
+            <Input
+              placeholder="e.g. 1001"
+              value={form.deviceUserId}
+              onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-muted">Must match the User ID on the K50A terminal.</p>
+          </div>
+          <div>
+            <Label>Designation</Label>
+            <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+          </div>
+          <div>
+            <Label>Department</Label>
+            <div className="flex gap-2">
+              <Select
+                className="flex-1"
+                value={form.departmentId}
+                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+              >
+                <option value="">Unassigned</option>
+                {departments.map((dep) => (
+                  <option key={dep.id} value={dep.id}>
+                    {dep.name}
+                  </option>
+                ))}
+              </Select>
+              <Button type="button" variant="outline" onClick={() => setDeptOpen(true)}>
+                New
+              </Button>
+            </div>
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </Select>
+          </div>
+          <div>
+            <Label>Joining date (optional)</Label>
+            <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
+          </div>
+          <div>
+            <Label>NID number (optional)</Label>
+            <Input
+              placeholder="National ID number"
+              value={form.nidNumber}
+              onChange={(e) => setForm({ ...form, nidNumber: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>NID file upload (optional)</Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => void uploadNid(e.target.files?.[0] ?? null)}
+            />
+            <p className="mt-1 text-xs text-muted">JPG, PNG, WEBP, or PDF · max 5 MB · saved in database with employee</p>
+            {form.nidDocumentUrl ? (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <a
+                  className="text-xs font-semibold text-teal hover:underline"
+                  href={form.nidDocumentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Preview NID file
+                </a>
+                <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, nidDocumentUrl: "" })}>
+                  Remove file
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setEmployeeOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={saving} onClick={() => void createEmployee()}>
+            {saving ? "Saving…" : "Save employee"}
+          </Button>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={deptOpen}
+        title="Add department"
+        description="Create a new department for employee assignment."
+        onClose={() => setDeptOpen(false)}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label>Department name *</Label>
+            <Input
+              placeholder="e.g. Ticketing"
+              value={deptName}
+              onChange={(e) => setDeptName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Code (optional)</Label>
+            <Input
+              placeholder="Auto from name if empty"
+              value={deptCode}
+              onChange={(e) => setDeptCode(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setDeptOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={saving} onClick={() => void createDepartment()}>
+              {saving ? "Saving…" : "Add department"}
+            </Button>
+          </div>
+        </div>
+      </ModalShell>
+
       <PageHeader
         eyebrow="Admin · Employee records"
         title="Employees"
-        description="Admin-only page. You manage employee records here. Staff never log in — they only scan on K50A."
+        description="Admin-only page. Staff never log in — they only scan on K50A."
+        actions={
+          <>
+            <Button type="button" variant="outline" onClick={() => setDeptOpen(true)}>
+              Add department
+            </Button>
+            <Button type="button" onClick={openAddEmployee}>
+              Add employee
+            </Button>
+          </>
+        }
       />
-      <Card className="mb-4 border-navy/20 bg-navy/5">
-        <CardContent className="space-y-2 p-5 text-sm leading-relaxed">
-          <p className="font-semibold text-navy">Who uses this website?</p>
-          <ul className="list-disc space-y-1 pl-5 text-muted">
-            <li>
-              <strong>Administrators</strong> (SUPER_ADMIN, ADMIN, VIEWER) — log in here to manage attendance and records.
-            </li>
-            <li>
-              <strong>Employees</strong> — do <strong>not</strong> use this website. No employee login exists. They only
-              scan fingerprint on K50A.
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
+
       <Card className="mb-4 border-teal/30 bg-teal/5">
         <CardContent className="space-y-2 p-5 text-sm leading-relaxed">
           <p className="font-semibold text-teal">How K50A and the website connect</p>
           <ol className="list-decimal space-y-1 pl-5 text-muted">
             <li>On K50A: enroll fingerprint and set User ID (example: 1001).</li>
-            <li>On this website: add employee and put the same number in K50A User ID.</li>
-            <li>When they scan, K50A sends User ID 1001 → website finds that employee → attendance is saved.</li>
+            <li>Click <strong>Add employee</strong> and enter the same K50A User ID.</li>
+            <li>When they scan, attendance is saved for that employee.</li>
           </ol>
-          <p className="text-xs text-muted">
-            If IDs do not match, the punch is still saved but shows as unknown until you fix Device User ID.
-            Check K50A users: Devices → your device → Read users.
-          </p>
         </CardContent>
       </Card>
+
       <div className="mb-4 flex flex-wrap gap-2">
-        <Input className="max-w-xs" placeholder="Search name, ID, or device UID" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input className="max-w-xs" placeholder="Search name, ID, NID, or device UID" value={q} onChange={(e) => setQ(e.target.value)} />
         <Select className="w-44" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
           <option value="">All departments</option>
           {departments.map((dep) => (
@@ -192,138 +420,76 @@ export default function EmployeesPage() {
           Search
         </Button>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
-        <Card>
-          <CardContent className="overflow-x-auto p-0">
-            <table className="w-full text-sm">
-              <thead className="bg-paper text-left text-xs uppercase tracking-wider text-muted">
-                <tr>
-                  <th className="px-5 py-3">Employee</th>
-                  <th className="px-5 py-3">Contact</th>
-                  <th className="px-5 py-3">Department</th>
-                  <th className="px-5 py-3">Joined</th>
-                  <th className="px-5 py-3">Device UID</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-line">
-                    <td className="px-5 py-3">
-                      <Link className="font-semibold text-teal hover:underline" href={`/admin/employees/${row.id}`}>
-                        {row.name}
-                      </Link>
-                      <div className="text-xs text-muted">
-                        {row.employeeCode} · {row.designation ?? "—"}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-xs">
-                      <div>{row.phone ?? "—"}</div>
-                      <div className="text-muted">{row.email ?? ""}</div>
-                    </td>
-                    <td className="px-5 py-3">{row.department?.name ?? "—"}</td>
-                    <td className="px-5 py-3">{formatDate(row.joinedAt)}</td>
-                    <td className="px-5 py-3 font-mono">{row.deviceUserId}</td>
-                    <td className="px-5 py-3">
-                      <Badge tone={row.status === "ACTIVE" ? "ok" : "muted"}>{row.status}</Badge>
-                      {row.nidDocumentUrl ? (
-                        <a className="mt-1 block text-xs text-teal hover:underline" href={row.nidDocumentUrl} target="_blank" rel="noreferrer">
-                          NID file
-                        </a>
-                      ) : null}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {row.status === "ACTIVE" ? (
-                          <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
-                            Deactivate
-                          </Button>
-                        ) : null}
-                        <Button size="sm" variant="danger" onClick={() => askDelete(row.id, row.name)}>
-                          Delete
+
+      <Card>
+        <CardContent className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="bg-paper text-left text-xs uppercase tracking-wider text-muted">
+              <tr>
+                <th className="px-5 py-3">Employee</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3">Department</th>
+                <th className="px-5 py-3">Joined</th>
+                <th className="px-5 py-3">NID</th>
+                <th className="px-5 py-3">Device UID</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-line">
+                  <td className="px-5 py-3">
+                    <Link className="font-semibold text-teal hover:underline" href={`/admin/employees/${row.id}`}>
+                      {row.name}
+                    </Link>
+                    <div className="text-xs text-muted">
+                      {row.employeeCode} · {row.designation ?? "—"}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-xs">
+                    <div>{row.phone ?? "—"}</div>
+                    <div className="text-muted">{row.email ?? ""}</div>
+                  </td>
+                  <td className="px-5 py-3">{row.department?.name ?? "—"}</td>
+                  <td className="px-5 py-3">{formatDate(row.joinedAt)}</td>
+                  <td className="px-5 py-3 text-xs">
+                    <div>{row.nidNumber ?? "—"}</div>
+                    {row.nidDocumentUrl ? (
+                      <a className="font-semibold text-teal hover:underline" href={row.nidDocumentUrl} target="_blank" rel="noreferrer">
+                        View file
+                      </a>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-3 font-mono">{row.deviceUserId}</td>
+                  <td className="px-5 py-3">
+                    <Badge tone={row.status === "ACTIVE" ? "ok" : "muted"}>{row.status}</Badge>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {row.status === "ACTIVE" ? (
+                        <Button size="sm" variant="outline" onClick={() => askDeactivate(row.id, row.name)}>
+                          Deactivate
                         </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-3 p-5">
-            <h2 className="font-semibold">Add employee</h2>
-            <div>
-              <Label>Employee ID</Label>
-              <Input value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} />
-            </div>
-            <div>
-              <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div>
-              <Label>Phone</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div>
-              <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div>
-              <Label>K50A User ID (same as on device)</Label>
-              <Input
-                placeholder="e.g. 1001"
-                value={form.deviceUserId}
-                onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })}
-              />
-              <p className="mt-1 text-xs text-muted">Must exactly match the User ID you set on the K50A terminal.</p>
-            </div>
-            <div>
-              <Label>Designation</Label>
-              <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
-            </div>
-            <div>
-              <Label>Department</Label>
-              <Select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
-                <option value="">Unassigned</option>
-                {departments.map((dep) => (
-                  <option key={dep.id} value={dep.id}>
-                    {dep.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Joining date (optional)</Label>
-              <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
-            </div>
-            <div>
-              <Label>NID number (optional)</Label>
-              <Input
-                placeholder="National ID number"
-                value={form.nidNumber}
-                onChange={(e) => setForm({ ...form, nidNumber: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>NID upload (optional)</Label>
-              <Input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                onChange={(e) => void uploadNid(e.target.files?.[0] ?? null)}
-              />
-              <p className="mt-1 text-xs text-muted">JPG, PNG, WEBP, or PDF · max 5 MB</p>
-              {form.nidDocumentUrl ? (
-                <a className="mt-1 inline-block text-xs font-semibold text-teal hover:underline" href={form.nidDocumentUrl} target="_blank" rel="noreferrer">
-                  View uploaded NID
-                </a>
+                      ) : null}
+                      <Button size="sm" variant="danger" onClick={() => askDelete(row.id, row.name)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-muted">
+                    No employees yet. Click <strong>Add employee</strong> to create one.
+                  </td>
+                </tr>
               ) : null}
-            </div>
-            <Button onClick={create}>Create employee</Button>
-          </CardContent>
-        </Card>
-      </div>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
