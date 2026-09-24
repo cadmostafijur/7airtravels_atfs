@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
-import { PDFDocument, StandardFonts } from "pdf-lib";
 import { requireApiSession } from "@/lib/auth/guards";
 import { jsonError } from "@/lib/http";
+import { buildAttendancePdf } from "@/lib/attendance/pdf";
 import { buildReport, exportMatrix } from "@/lib/attendance/reports";
 
 export const runtime = "nodejs";
@@ -11,31 +11,6 @@ function csvEscape(value: unknown) {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
   return text;
-}
-
-/** Helvetica is WinAnsi-only. Punch labels use → · — which crash drawText. */
-function pdfSafe(value: unknown): string {
-  const text = String(value ?? "")
-    .replaceAll("→", "->")
-    .replaceAll("←", "<-")
-    .replaceAll("·", " | ")
-    .replaceAll("•", "*")
-    .replaceAll("—", "-")
-    .replaceAll("–", "-")
-    .replaceAll("…", "...")
-    .replaceAll("’", "'")
-    .replaceAll("‘", "'")
-    .replaceAll("“", '"')
-    .replaceAll("”", '"');
-  return [...text]
-    .map((ch) => {
-      const code = ch.codePointAt(0) ?? 0;
-      if (code >= 0x20 && code <= 0x7e) return ch;
-      if (code >= 0xa0 && code <= 0xff) return ch;
-      if (code === 0x09 || code === 0x0a || code === 0x0d) return " ";
-      return "?";
-    })
-    .join("");
 }
 
 function fileResponse(body: BodyInit, contentType: string, filename: string) {
@@ -53,7 +28,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") ?? "csv";
     const report = await buildReport({
-      type: searchParams.get("type") ?? "daily",
+      type: searchParams.get("type") ?? "presence",
       from: searchParams.get("from") ?? new Date().toISOString(),
       to: searchParams.get("to") ?? new Date().toISOString(),
       employeeId: searchParams.get("employeeId") ?? undefined,
@@ -66,9 +41,16 @@ export async function GET(request: Request) {
 
     if (format === "xlsx") {
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Attendance");
-      sheet.addRow(header);
+      const sheet = workbook.addWorksheet(report.title ?? "Attendance");
+      const head = sheet.addRow(header);
+      head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E8A96" } };
       rows.forEach((line) => sheet.addRow(line));
+      sheet.columns.forEach((col, index) => {
+        const label = header[index] ?? "";
+        col.width = report.type === "presence" && index >= 3 && label.length <= 3 ? 4 : Math.min(28, Math.max(8, label.length + 4));
+      });
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
       const buffer = await workbook.xlsx.writeBuffer();
       return fileResponse(
         Buffer.from(buffer),
@@ -78,24 +60,14 @@ export async function GET(request: Request) {
     }
 
     if (format === "pdf") {
-      const doc = await PDFDocument.create();
-      let page = doc.addPage([842, 595]);
-      const font = await doc.embedFont(StandardFonts.Helvetica);
-      let y = 560;
-      page.drawText(pdfSafe(`7 Air Travels - ${report.type} attendance report`), { x: 40, y, size: 14, font });
-      y -= 24;
-      page.drawText(pdfSafe(header.join(" | ")), { x: 40, y, size: 8, font });
-      y -= 14;
-      for (const line of rows) {
-        if (y < 40) {
-          page = doc.addPage([842, 595]);
-          y = 560;
-        }
-        page.drawText(pdfSafe(line.join(" | ")).slice(0, 140), { x: 40, y, size: 8, font });
-        y -= 12;
-      }
-      const bytes = await doc.save();
-      return fileResponse(Buffer.from(bytes), "application/pdf", `${filename}.pdf`);
+      const bytes = await buildAttendancePdf({
+        type: report.type,
+        title: report.title,
+        subtitle: report.subtitle,
+        header,
+        rows,
+      });
+      return fileResponse(bytes, "application/pdf", `${filename}.pdf`);
     }
 
     const csv = [header, ...rows].map((line) => line.map(csvEscape).join(",")).join("\n");

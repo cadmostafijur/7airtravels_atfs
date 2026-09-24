@@ -19,7 +19,8 @@ type Employee = { id: string; name: string; employeeCode: string };
 type Dept = { id: string; name: string };
 
 const types = [
-  { id: "daily", label: "Daily" },
+  { id: "presence", label: "Presence register" },
+  { id: "daily", label: "Daily detail" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
   { id: "employee", label: "Employee-wise" },
@@ -42,13 +43,13 @@ function cell(row: Record<string, unknown>, column: string) {
   if (key === "early") return String(row.earlyMinutes ?? "");
   if (key === "ot") return String(row.overtimeMinutes ?? "");
   if (key === "hours") return String(row.hours ?? "");
+  if (key === "dept" || key === "department") return String(row.department ?? "");
   if (key === "status" || key === "leave") {
     return String(row.status ?? row.leave ?? "");
   }
   const map: Record<string, string> = {
     date: "date",
     name: "name",
-    department: "department",
     from: "from",
     to: "to",
     reason: "reason",
@@ -64,10 +65,17 @@ function cell(row: Record<string, unknown>, column: string) {
   return String(row[map[key] ?? key] ?? row[column] ?? "");
 }
 
+function markClass(value: string) {
+  if (["P", "L", "E", "HD"].includes(value)) return "font-semibold text-teal";
+  if (value === "A") return "font-semibold text-signal";
+  if (value === "V") return "font-semibold text-brass";
+  return "text-muted";
+}
+
 export default function ReportsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
-  const [type, setType] = useState("daily");
+  const [type, setType] = useState("presence");
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [q, setQ] = useState("");
@@ -125,20 +133,26 @@ export default function ReportsPage() {
   }
 
   useEffect(() => {
-    void Promise.all([load(), api<Employee[]>("/api/employees"), api<Dept[]>("/api/departments")]).then(
-      ([, emps, deps]) => {
+    void Promise.all([api<Employee[]>("/api/employees"), api<Dept[]>("/api/departments")])
+      .then(([emps, deps]) => {
         setEmployees(emps);
         setDepartments(deps);
-      },
-    );
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to load filters");
+      });
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [type, from, to]);
 
   return (
     <div>
       <PageHeader
         eyebrow="Exports"
         title="Attendance reports"
-        description="Daily, weekly, monthly, employee, department, late, absent, hours, and leave reports. Filter and export."
+        description="See which day each employee was present or absent. Filter the range, then download PDF, Excel, or CSV."
         actions={
           <>
             <Button variant="outline" disabled={downloading !== null} onClick={() => void download("csv")}>
@@ -198,28 +212,42 @@ export default function ReportsPage() {
             ))}
           </Select>
         </div>
-        <div>
-          <Label>Status</Label>
-          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All</option>
-            {["PRESENT", "LATE", "ABSENT", "EARLY_LEAVE", "HALF_DAY", "LEAVE", "HOLIDAY", "WEEKEND", "OVERTIME"].map(
-              (value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ),
-            )}
-          </Select>
-        </div>
+        {type !== "presence" ? (
+          <div>
+            <Label>Status</Label>
+            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All</option>
+              {["PRESENT", "LATE", "ABSENT", "EARLY_LEAVE", "HALF_DAY", "LEAVE", "HOLIDAY", "WEEKEND", "OVERTIME"].map(
+                (value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ),
+              )}
+            </Select>
+          </div>
+        ) : null}
         <Button onClick={() => void load()}>Apply</Button>
       </div>
+      {type === "presence" ? (
+        <p className="mb-3 text-xs text-muted">
+          P Present · L Late · A Absent · V Leave · H Holiday · W Weekend · HD Half-day · E Early · - No record
+        </p>
+      ) : null}
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-paper text-left text-xs uppercase text-muted">
               <tr>
                 {(report?.columns ?? []).map((column) => (
-                  <th key={column} className="px-5 py-3">
+                  <th
+                    key={column}
+                    className={
+                      type === "presence" && /^\d/.test(column)
+                        ? "px-1.5 py-3 text-center"
+                        : "px-5 py-3"
+                    }
+                  >
                     {column}
                   </th>
                 ))}
@@ -230,8 +258,12 @@ export default function ReportsPage() {
                 <tr key={String(row.id)} className="border-t border-line">
                   {(report?.columns ?? []).map((column) => {
                     const value = cell(row, column);
+                    const dayMark = type === "presence" && /^\d/.test(column);
                     return (
-                      <td key={column} className="px-5 py-3">
+                      <td
+                        key={column}
+                        className={dayMark ? `px-1.5 py-2 text-center ${markClass(value)}` : "px-5 py-3"}
+                      >
                         {column === "Status" ? <Badge tone={statusTone(value)}>{value}</Badge> : value}
                       </td>
                     );

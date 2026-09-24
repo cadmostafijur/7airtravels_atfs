@@ -2,7 +2,7 @@ import "server-only";
 
 import type { DailyAttendanceSummary, Employee, Department } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatDate, formatTime, startOfZonedDay, endOfZonedDay } from "@/lib/time";
+import { formatDate, formatTime, startOfZonedDay, endOfZonedDay, workDateKey, addDaysKey } from "@/lib/time";
 import { formatHours, isoWeekKey, monthKey } from "@/lib/hours";
 import { summaryWhere } from "@/lib/attendance/stats";
 import { loadPunchBundlesForSummaries, summaryPunchKey } from "@/lib/attendance/punches";
@@ -20,6 +20,115 @@ export type ReportQuery = {
   status?: string;
   q?: string;
 };
+
+export type BuiltReport = {
+  type: string;
+  title?: string;
+  subtitle?: string;
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+};
+
+const PRESENT_MARKS = new Set(["P", "L", "E", "HD"]);
+
+function statusMark(status: string) {
+  if (status === "PRESENT" || status === "OVERTIME") return "P";
+  if (status === "LATE") return "L";
+  if (status === "EARLY_LEAVE") return "E";
+  if (status === "HALF_DAY") return "HD";
+  if (status === "ABSENT") return "A";
+  if (status === "LEAVE") return "V";
+  if (status === "HOLIDAY") return "H";
+  if (status === "WEEKEND") return "W";
+  return "-";
+}
+
+function dayKeys(from: string, to: string) {
+  const start = workDateKey(new Date(from || Date.now()));
+  const end = workDateKey(new Date(to || Date.now()));
+  const keys: string[] = [];
+  for (let key = start, i = 0; key <= end && i < 93; i += 1, key = addDaysKey(key, 1)) {
+    keys.push(key);
+  }
+  return keys;
+}
+
+function dayLabel(key: string, sameMonth: boolean) {
+  const day = String(Number(key.slice(8, 10)));
+  if (sameMonth) return day;
+  return `${day}/${Number(key.slice(5, 7))}`;
+}
+
+async function presenceRegister(query: ReportQuery): Promise<BuiltReport> {
+  const days = dayKeys(query.from, query.to);
+  const sameMonth = days.length > 0 && days.every((key) => key.slice(0, 7) === days[0]!.slice(0, 7));
+  const dayColumns = days.map((key) => dayLabel(key, sameMonth));
+  const summaries = (await loadSummaries({ ...query, type: "presence", status: undefined })) as Row[];
+  const byEmpDay = new Map<string, Row>();
+  for (const row of summaries) {
+    byEmpDay.set(`${row.employeeId}:${row.workDate.toISOString().slice(0, 10)}`, row);
+  }
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      AND: [
+        query.employeeId ? { id: query.employeeId } : {},
+        query.departmentId ? { departmentId: query.departmentId } : {},
+        query.q
+          ? {
+              OR: [
+                { name: { contains: query.q, mode: "insensitive" } },
+                { employeeCode: { contains: query.q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+        summaries.length
+          ? { OR: [{ status: "ACTIVE" }, { id: { in: [...new Set(summaries.map((row) => row.employeeId))] } }] }
+          : { status: "ACTIVE" },
+      ],
+    },
+    include: { department: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = employees.map((employee) => {
+    const marks: Record<string, string> = {};
+    let present = 0;
+    let late = 0;
+    let absent = 0;
+    let leave = 0;
+    days.forEach((day, index) => {
+      const summary = byEmpDay.get(`${employee.id}:${day}`);
+      const mark = summary ? statusMark(summary.status) : "-";
+      marks[dayColumns[index]!] = mark;
+      if (PRESENT_MARKS.has(mark)) present += 1;
+      if (mark === "L") late += 1;
+      if (mark === "A") absent += 1;
+      if (mark === "V") leave += 1;
+    });
+    return {
+      id: employee.id,
+      name: employee.name,
+      employeeCode: employee.employeeCode,
+      department: employee.department?.name ?? "",
+      ...marks,
+      present,
+      late,
+      absent,
+      leave,
+    };
+  });
+
+  const fromLabel = formatDate(new Date(`${query.from || days[0] || workDateKey(new Date())}T12:00:00Z`));
+  const toLabel = formatDate(new Date(`${query.to || days.at(-1) || workDateKey(new Date())}T12:00:00Z`));
+  return {
+    type: "presence",
+    title: "Daily presence register",
+    subtitle: `${fromLabel} to ${toLabel}  |  P Present   L Late   A Absent   V Leave   H Holiday   W Weekend   HD Half-day   E Early   - No record`,
+    columns: ["Employee", "Code", "Dept", ...dayColumns, "Present", "Late", "Absent", "Leave"],
+    rows,
+  };
+}
 
 function filters(query: ReportQuery) {
   return summaryWhere({
@@ -108,8 +217,12 @@ function bucket(rows: Row[], keyFn: (row: Row) => string, label: (key: string, s
   }));
 }
 
-export async function buildReport(query: ReportQuery) {
-  const type = query.type || "daily";
+export async function buildReport(query: ReportQuery): Promise<BuiltReport> {
+  const type = query.type || "presence";
+
+  if (type === "presence") {
+    return presenceRegister(query);
+  }
 
   if (type === "leave") {
     const from = startOfZonedDay(new Date(query.from || Date.now()));
@@ -213,6 +326,7 @@ export async function buildReport(query: ReportQuery) {
 
   return {
     type: type === "hours" ? "hours" : type,
+    title: type === "hours" ? "Working hours" : "Daily attendance",
     columns: [
       "Date",
       "Code",
@@ -259,7 +373,7 @@ export function exportMatrix(report: Awaited<ReturnType<typeof buildReport>>) {
       if (key === "reason") return String(record.reason ?? "");
       if (key === "date") return String(record.date ?? "");
       if (key === "name") return String(record.name ?? "");
-      if (key === "department") return String(record.department ?? "");
+      if (key === "department" || key === "dept") return String(record.department ?? "");
       if (key === "status") return String(record.status ?? "");
       if (key === "device") return String(record.device ?? "");
       return String(record[column] ?? record[key] ?? "");
