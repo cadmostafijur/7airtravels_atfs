@@ -125,7 +125,7 @@ export async function buildAttendancePdf(input: {
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  let page: PDFPage | null = null;
+  let page!: PDFPage;
   let y = 0;
   let pageNo = 0;
 
@@ -147,7 +147,7 @@ export async function buildAttendancePdf(input: {
   };
 
   const newPage = () => {
-    if (page) footer(page);
+    if (pageNo > 0) footer(page);
     page = doc.addPage([pageW, pageH]);
     pageNo += 1;
     page.drawRectangle({ x: 0, y: pageH - 36, width: pageW, height: 36, color: NAVY });
@@ -186,12 +186,11 @@ export async function buildAttendancePdf(input: {
   };
 
   const drawHeaderRow = () => {
-    if (!page) return;
     let x = margin;
     page.drawRectangle({ x: margin, y: y - 4, width: inner, height: headerH, color: TEAL });
     input.header.forEach((label, index) => {
       const w = widths[index] ?? 20;
-      page!.drawText(fit(bold, label, fontSize, w - 4), {
+      page.drawText(fit(bold, label, fontSize, w - 4), {
         x: x + 2,
         y: y + 2,
         size: fontSize,
@@ -204,17 +203,17 @@ export async function buildAttendancePdf(input: {
   };
 
   const drawRow = (cells: string[], index: number) => {
-    if (!page || y < 36) newPage();
+    if (y < 36) newPage();
     let x = margin;
     if (index % 2 === 0) {
-      page!.drawRectangle({ x: margin, y: y - 3, width: inner, height: rowH, color: PAPER });
+      page.drawRectangle({ x: margin, y: y - 3, width: inner, height: rowH, color: PAPER });
     }
     cells.forEach((cell, col) => {
       const w = widths[col] ?? 20;
       const value = pdfSafe(cell);
       const color = presence && col >= 3 ? markColor(value) : INK;
       const used = presence && col >= 3 && value.length <= 2 ? bold : font;
-      page!.drawText(fit(used, value, fontSize, w - 4), {
+      page.drawText(fit(used, value, fontSize, w - 4), {
         x: x + 2,
         y: y + 1,
         size: fontSize,
@@ -223,7 +222,7 @@ export async function buildAttendancePdf(input: {
       });
       x += w;
     });
-    page!.drawLine({
+    page.drawLine({
       start: { x: margin, y: y - 3 },
       end: { x: margin + inner, y: y - 3 },
       thickness: 0.3,
@@ -234,15 +233,15 @@ export async function buildAttendancePdf(input: {
 
   newPage();
   input.rows.forEach((row, index) => drawRow(row, index));
-  if (page) footer(page);
 
-  if (presence && page) {
-    if (y < 48) newPage();
+  if (presence && y < 48) newPage();
+  if (presence) {
     page.drawText(
       pdfSafe("P Present   L Late   A Absent   V Leave   H Holiday   W Weekend   HD Half-day   E Early   - No record"),
       { x: margin, y: Math.max(28, y - 8), size: 7, font, color: MUTED },
     );
   }
+  footer(page);
 
   return Buffer.from(await doc.save());
 }
