@@ -19,8 +19,8 @@ type Employee = { id: string; name: string; employeeCode: string };
 type Dept = { id: string; name: string };
 
 const types = [
-  { id: "presence", label: "Presence register" },
   { id: "daily", label: "Daily detail" },
+  { id: "presence", label: "Presence register" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
   { id: "employee", label: "Employee-wise" },
@@ -75,7 +75,7 @@ function markClass(value: string) {
 export default function ReportsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
-  const [type, setType] = useState("presence");
+  const [type, setType] = useState("daily");
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [q, setQ] = useState("");
@@ -87,8 +87,8 @@ export default function ReportsPage() {
   const [departments, setDepartments] = useState<Dept[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  function query() {
-    const qs = new URLSearchParams({ type, from, to });
+  function query(nextType = type) {
+    const qs = new URLSearchParams({ type: nextType, from, to });
     if (q) qs.set("q", q);
     if (employeeId) qs.set("employeeId", employeeId);
     if (departmentId) qs.set("departmentId", departmentId);
@@ -104,27 +104,39 @@ export default function ReportsPage() {
     }
   }
 
+  async function saveDownload(url: string, filename: string) {
+    const response = await fetch(url, { credentials: "include" });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const json = (await response.json()) as { error?: string };
+      throw new Error(json.error ?? "Export failed");
+    }
+    if (!response.ok) throw new Error("Export failed");
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
   async function download(format: "csv" | "xlsx" | "pdf") {
     setDownloading(format);
     try {
-      const response = await fetch(`/api/reports/export?format=${format}&${query()}`, {
-        credentials: "include",
-      });
-      const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        const json = (await response.json()) as { error?: string };
-        throw new Error(json.error ?? "Export failed");
+      if (format === "csv") {
+        await saveDownload(`/api/reports/export?format=csv&${query("daily")}`, "attendance-daily.csv");
+        if (type !== "daily") {
+          await saveDownload(`/api/reports/export?format=csv&${query()}`, `attendance-${type}.csv`);
+        }
+        return;
       }
-      if (!response.ok) throw new Error("Export failed");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `attendance-${type}.${format === "xlsx" ? "xlsx" : format}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await saveDownload(
+        `/api/reports/export?format=${format}&${query()}`,
+        `attendance-${type}.${format === "xlsx" ? "xlsx" : format}`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Export failed");
     } finally {
@@ -152,7 +164,7 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Exports"
         title="Attendance reports"
-        description="See which day each employee was present or absent. Filter the range, then download PDF, Excel, or CSV."
+        description="Daily entries include Date, Code, Name, Department, Status, In, Out, Punches, Late, Early, OT, and Hours. CSV and Excel both include this full data."
         actions={
           <>
             <Button variant="outline" disabled={downloading !== null} onClick={() => void download("csv")}>

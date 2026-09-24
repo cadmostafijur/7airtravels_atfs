@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     return jsonOk(
       await buildReport({
-        type: searchParams.get("type") ?? "presence",
+        type: searchParams.get("type") ?? "daily",
         from: searchParams.get("from") ?? new Date().toISOString(),
         to: searchParams.get("to") ?? new Date().toISOString(),
         employeeId: searchParams.get("employeeId") ?? undefined,

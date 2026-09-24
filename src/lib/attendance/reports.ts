@@ -345,6 +345,13 @@ export async function buildReport(query: ReportQuery): Promise<BuiltReport> {
   };
 }
 
+function exportText(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("→", "->")
+    .replaceAll("·", " | ")
+    .replaceAll("—", "-");
+}
+
 export function exportMatrix(report: Awaited<ReturnType<typeof buildReport>>) {
   const header = report.columns;
   const rows = report.rows.map((row) =>
@@ -353,9 +360,9 @@ export function exportMatrix(report: Awaited<ReturnType<typeof buildReport>>) {
       const record = row as Record<string, unknown>;
       if (key === "employee") return String(record.name ?? "");
       if (key === "code") return String(record.employeeCode ?? "");
-      if (key === "in") return String(record.checkIn ?? "");
-      if (key === "out") return String(record.checkOut ?? "");
-      if (key === "punches") return String(record.punches ?? "");
+      if (key === "in") return exportText(record.checkIn);
+      if (key === "out") return exportText(record.checkOut);
+      if (key === "punches") return exportText(record.punches);
       if (key === "late") return String(record.lateMinutes ?? record.late ?? "");
       if (key === "early") return String(record.earlyMinutes ?? "");
       if (key === "ot") return String(record.overtimeMinutes ?? "");
