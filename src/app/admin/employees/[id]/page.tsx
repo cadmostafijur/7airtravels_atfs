@@ -26,6 +26,9 @@ type Employee = {
   joinedAt: string | null;
   nidNumber: string | null;
   nidDocumentUrl: string | null;
+  monthlySalary: number;
+  latePenalty: number | null;
+  absentPenalty: number | null;
   departmentId: string | null;
   department: { name: string } | null;
   summaries: Array<{
@@ -59,6 +62,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     joinedAt: "",
     nidNumber: "",
     nidDocumentUrl: "",
+    monthlySalary: "",
+    latePenalty: "",
+    absentPenalty: "",
   });
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
@@ -81,6 +87,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       joinedAt: data.joinedAt ? data.joinedAt.slice(0, 10) : "",
       nidNumber: data.nidNumber ?? "",
       nidDocumentUrl: data.nidDocumentUrl ?? "",
+      monthlySalary: data.monthlySalary ? String(data.monthlySalary) : "",
+      latePenalty: data.latePenalty == null ? "" : String(data.latePenalty),
+      absentPenalty: data.absentPenalty == null ? "" : String(data.absentPenalty),
     });
   }
 
@@ -100,6 +109,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           joinedAt: form.joinedAt || null,
           nidNumber: form.nidNumber || null,
           nidDocumentUrl: form.nidDocumentUrl || null,
+          monthlySalary: Number(form.monthlySalary || 0),
+          latePenalty: form.latePenalty === "" ? null : Number(form.latePenalty),
+          absentPenalty: form.absentPenalty === "" ? null : Number(form.absentPenalty),
         }),
       });
       toast.success("Saved");
@@ -257,6 +269,36 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   </Button>
                 </div>
               ) : null}
+            </div>
+            <div>
+              <Label>Monthly salary (Tk)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="e.g. 10000"
+                value={form.monthlySalary}
+                onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Late penalty (Tk / day)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Company default if empty"
+                value={form.latePenalty}
+                onChange={(e) => setForm({ ...form, latePenalty: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Absent penalty (Tk / day)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Company default if empty"
+                value={form.absentPenalty}
+                onChange={(e) => setForm({ ...form, absentPenalty: e.target.value })}
+              />
             </div>
             <div>
               <Label>Device user ID</Label>

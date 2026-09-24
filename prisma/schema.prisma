@@ -125,6 +125,12 @@ model Employee {
   joinedAt       DateTime?
   nidNumber      String?
   nidDocumentUrl String?
+  /// Monthly base salary in BDT. Admin sets this on the employee record.
+  monthlySalary  Int                      @default(0)
+  /// Per-late-day penalty in BDT. Null = use company default.
+  latePenalty    Int?
+  /// Per-absent-day penalty in BDT. Null = use company default.
+  absentPenalty  Int?
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
   department     Department?              @relation(fields: [departmentId], references: [id])
@@ -336,4 +342,13 @@ model SystemSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model PayrollSetting {
+  id            String   @id @default("default")
+  latePenalty   Int      @default(200)
+  absentPenalty Int      @default(500)
+  currency      String   @default("BDT")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

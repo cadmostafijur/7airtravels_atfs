@@ -17,7 +17,16 @@ const schema = z.object({
   joinedAt: z.union([z.string(), z.literal(""), z.null()]).optional(),
   nidNumber: z.union([z.string(), z.literal(""), z.null()]).optional(),
   nidDocumentUrl: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  monthlySalary: z.coerce.number().int().min(0).max(20_000_000).optional(),
+  latePenalty: z.union([z.coerce.number().int().min(0).max(20_000_000), z.null(), z.literal("")]).optional(),
+  absentPenalty: z.union([z.coerce.number().int().min(0).max(20_000_000), z.null(), z.literal("")]).optional(),
 });
+
+function penaltyValue(value: number | "" | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === "" || value === null) return null;
+  return value;
+}
 
 export async function GET(request: Request) {
   try {
@@ -67,6 +76,9 @@ export async function POST(request: Request) {
         joinedAt: body.joinedAt ? new Date(body.joinedAt) : null,
         nidNumber: body.nidNumber?.trim() || null,
         nidDocumentUrl: body.nidDocumentUrl?.trim() || null,
+        monthlySalary: body.monthlySalary ?? 0,
+        latePenalty: penaltyValue(body.latePenalty) ?? null,
+        absentPenalty: penaltyValue(body.absentPenalty) ?? null,
       },
     });
     await writeAudit({

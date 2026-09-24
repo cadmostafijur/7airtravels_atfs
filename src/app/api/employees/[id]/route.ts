@@ -18,7 +18,16 @@ const schema = z.object({
   joinedAt: z.union([z.string(), z.literal(""), z.null()]).optional(),
   nidNumber: z.union([z.string(), z.literal(""), z.null()]).optional(),
   nidDocumentUrl: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  monthlySalary: z.coerce.number().int().min(0).max(20_000_000).optional(),
+  latePenalty: z.union([z.coerce.number().int().min(0).max(20_000_000), z.null(), z.literal("")]).optional(),
+  absentPenalty: z.union([z.coerce.number().int().min(0).max(20_000_000), z.null(), z.literal("")]).optional(),
 });
+
+function penaltyValue(value: number | "" | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === "" || value === null) return null;
+  return value;
+}
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -47,7 +56,7 @@ export async function PUT(request: Request, context: Ctx) {
     const admin = await requireApiSession(request, "employees.write");
     const { id } = await context.params;
     const body = schema.parse(await readJson(request));
-    const { joinedAt, email, nidNumber, nidDocumentUrl, ...rest } = body;
+    const { joinedAt, email, nidNumber, nidDocumentUrl, monthlySalary, latePenalty, absentPenalty, ...rest } = body;
     const employee = await prisma.employee.update({
       where: { id },
       data: {
@@ -56,6 +65,9 @@ export async function PUT(request: Request, context: Ctx) {
         joinedAt: joinedAt === undefined ? undefined : joinedAt ? new Date(joinedAt) : null,
         nidNumber: nidNumber === undefined ? undefined : nidNumber?.trim() || null,
         nidDocumentUrl: nidDocumentUrl === undefined ? undefined : nidDocumentUrl?.trim() || null,
+        monthlySalary,
+        latePenalty: penaltyValue(latePenalty),
+        absentPenalty: penaltyValue(absentPenalty),
       },
     });
     await writeAudit({

@@ -99,6 +99,7 @@ function reportTitle(type: string) {
     hours: "Working hours",
     leave: "Leave register",
     raw: "Raw punch log",
+    payroll: "Month-end payroll",
   };
   return labels[type] ?? `${type} report`;
 }

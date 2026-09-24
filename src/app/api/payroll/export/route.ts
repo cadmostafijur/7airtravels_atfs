@@ -1,0 +1,106 @@
+import ExcelJS from "exceljs";
+import { requireApiSession } from "@/lib/auth/guards";
+import { jsonError } from "@/lib/http";
+import { buildAttendancePdf } from "@/lib/attendance/pdf";
+import { buildMonthlyPayroll, currentPayrollMonth, taka } from "@/lib/payroll";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
+}
+
+export async function GET(request: Request) {
+  try {
+    await requireApiSession(request, "payroll");
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get("format") ?? "csv";
+    const month = searchParams.get("month") || currentPayrollMonth();
+    const report = await buildMonthlyPayroll(month);
+    const header = [
+      "Employee",
+      "Code",
+      "Department",
+      "Base salary",
+      "Present days",
+      "Late days",
+      "Late penalty",
+      "Absent days",
+      "Absent penalty",
+      "Net payable",
+    ];
+    const rows = report.rows.map((row) => [
+      row.name,
+      row.employeeCode,
+      row.department,
+      String(row.monthlySalary),
+      String(row.presentDays),
+      String(row.lateDays),
+      String(row.lateDeduction),
+      String(row.absentDays),
+      String(row.absentDeduction),
+      String(row.netSalary),
+    ]);
+    rows.push([
+      "TOTAL",
+      "",
+      "",
+      String(report.totals.monthlySalary),
+      "",
+      String(report.totals.lateDays),
+      String(report.totals.lateDeduction),
+      String(report.totals.absentDays),
+      String(report.totals.absentDeduction),
+      String(report.totals.netSalary),
+    ]);
+    const filename = `payroll-${month}`;
+
+    if (format === "xlsx") {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Payroll");
+      const head = sheet.addRow(header);
+      head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E8A96" } };
+      rows.forEach((line) => sheet.addRow(line));
+      sheet.columns.forEach((col) => {
+        col.width = 16;
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new Response(Buffer.from(buffer), {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const bytes = await buildAttendancePdf({
+        type: "payroll",
+        title: `Month-end payroll - ${month}`,
+        subtitle: `${report.from} to ${report.to}  |  Late penalty ${taka(report.settings.latePenalty)} / day  |  Absent penalty ${taka(report.settings.absentPenalty)} / day`,
+        header,
+        rows,
+      });
+      return new Response(bytes, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}.pdf"`,
+        },
+      });
+    }
+
+    const csv = [header, ...rows].map((line) => line.map(csvEscape).join(",")).join("\n");
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}.csv"`,
+      },
+    });
+  } catch (error) {
+    return jsonError(error);
+  }
+}

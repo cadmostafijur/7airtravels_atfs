@@ -80,6 +80,16 @@ const sections = [
       "SUPER_ADMIN / ADMIN: সব manage | VIEWER: শুধু দেখা",
     ],
   },
+  {
+    title: "৮. বেতন, লেট ও অনুপস্থিত পেনাল্টি",
+    body: [
+      "Employee records → Add/Edit employee → Monthly salary (যেমন 10000 টাকা)",
+      "Salary page-এ company default: Late penalty / Absent penalty (প্রতিদিন)",
+      "মাস শেষে Salary page খুলুন — late/absent দিন অনুযায়ী কাটা হয়ে Net payable দেখাবে",
+      "উদাহরণ: বেতন 10000, late 200×2 দিন = 400, absent 500×1 = 500 → নেট 9100",
+      "কোনো কর্মচারীর আলাদা পেনাল্টি লাগলে employee record-এ override দিন",
+    ],
+  },
 ];
 
 export default function HelpPage() {

@@ -24,6 +24,9 @@ type Employee = {
   joinedAt: string | null;
   nidNumber: string | null;
   nidDocumentUrl: string | null;
+  monthlySalary: number;
+  latePenalty: number | null;
+  absentPenalty: number | null;
   departmentId: string | null;
   department: { name: string } | null;
 };
@@ -41,6 +44,9 @@ const emptyForm = {
   joinedAt: "",
   nidNumber: "",
   nidDocumentUrl: "",
+  monthlySalary: "",
+  latePenalty: "",
+  absentPenalty: "",
   status: "ACTIVE",
 };
 
@@ -136,6 +142,9 @@ export default function EmployeesPage() {
         joinedAt: data.joinedAt ? data.joinedAt.slice(0, 10) : "",
         nidNumber: data.nidNumber ?? "",
         nidDocumentUrl: data.nidDocumentUrl ?? "",
+        monthlySalary: data.monthlySalary ? String(data.monthlySalary) : "",
+        latePenalty: data.latePenalty == null ? "" : String(data.latePenalty),
+        absentPenalty: data.absentPenalty == null ? "" : String(data.absentPenalty),
         status: data.status,
       });
       setEmployeeOpen(true);
@@ -162,6 +171,9 @@ export default function EmployeesPage() {
       joinedAt: form.joinedAt || null,
       nidNumber: form.nidNumber.trim() || null,
       nidDocumentUrl: form.nidDocumentUrl || null,
+      monthlySalary: Number(form.monthlySalary || 0),
+      latePenalty: form.latePenalty === "" ? null : Number(form.latePenalty),
+      absentPenalty: form.absentPenalty === "" ? null : Number(form.absentPenalty),
     };
     try {
       if (editingId) {
@@ -337,6 +349,36 @@ export default function EmployeesPage() {
             </Select>
           </div>
           <div>
+            <Label>Monthly salary (Tk)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="e.g. 10000"
+              value={form.monthlySalary}
+              onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Late penalty (Tk / day)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Company default if empty"
+              value={form.latePenalty}
+              onChange={(e) => setForm({ ...form, latePenalty: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Absent penalty (Tk / day)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Company default if empty"
+              value={form.absentPenalty}
+              onChange={(e) => setForm({ ...form, absentPenalty: e.target.value })}
+            />
+          </div>
+          <div>
             <Label>Joining date (optional)</Label>
             <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />
           </div>
@@ -479,6 +521,7 @@ export default function EmployeesPage() {
                 <th className="px-5 py-3">Employee</th>
                 <th className="px-5 py-3">Contact</th>
                 <th className="px-5 py-3">Department</th>
+                <th className="px-5 py-3">Salary</th>
                 <th className="px-5 py-3">Joined</th>
                 <th className="px-5 py-3">NID</th>
                 <th className="px-5 py-3">Device UID</th>
@@ -502,6 +545,7 @@ export default function EmployeesPage() {
                     <div className="text-muted">{row.email ?? ""}</div>
                   </td>
                   <td className="px-5 py-3">{row.department?.name ?? "—"}</td>
+                  <td className="px-5 py-3">{row.monthlySalary ? `Tk ${row.monthlySalary.toLocaleString("en-BD")}` : "—"}</td>
                   <td className="px-5 py-3">{formatDate(row.joinedAt)}</td>
                   <td className="px-5 py-3 text-xs">
                     <div>{row.nidNumber ?? "—"}</div>
@@ -534,7 +578,7 @@ export default function EmployeesPage() {
               ))}
               {!rows.length ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted">
                     No employees yet. Click <strong>Add employee</strong> to create one.
                   </td>
                 </tr>
