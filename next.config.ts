@@ -6,7 +6,7 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   ...(process.env.DOCKER_BUILD === "true" ? { output: "standalone" as const } : {}),
-  serverExternalPackages: ["node-zklib", "pg", "@prisma/client"],
+  serverExternalPackages: ["node-zklib", "pg", "@prisma/client", "exceljs", "pdf-lib"],
 };
 
 export default nextConfig;

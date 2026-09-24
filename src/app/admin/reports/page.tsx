@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export default function ReportsPage() {
   const [report, setReport] = useState<Report | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Dept[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   function query() {
     const qs = new URLSearchParams({ type, from, to });
@@ -87,7 +89,39 @@ export default function ReportsPage() {
   }
 
   async function load() {
-    setReport(await api<Report>(`/api/reports?${query()}`));
+    try {
+      setReport(await api<Report>(`/api/reports?${query()}`));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load report");
+    }
+  }
+
+  async function download(format: "csv" | "xlsx" | "pdf") {
+    setDownloading(format);
+    try {
+      const response = await fetch(`/api/reports/export?format=${format}&${query()}`, {
+        credentials: "include",
+      });
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const json = (await response.json()) as { error?: string };
+        throw new Error(json.error ?? "Export failed");
+      }
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `attendance-${type}.${format === "xlsx" ? "xlsx" : format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    } finally {
+      setDownloading(null);
+    }
   }
 
   useEffect(() => {
@@ -107,15 +141,15 @@ export default function ReportsPage() {
         description="Daily, weekly, monthly, employee, department, late, absent, hours, and leave reports. Filter and export."
         actions={
           <>
-            <a href={`/api/reports/export?format=csv&${query()}`}>
-              <Button variant="outline">CSV</Button>
-            </a>
-            <a href={`/api/reports/export?format=xlsx&${query()}`}>
-              <Button variant="outline">Excel</Button>
-            </a>
-            <a href={`/api/reports/export?format=pdf&${query()}`}>
-              <Button variant="outline">PDF</Button>
-            </a>
+            <Button variant="outline" disabled={downloading !== null} onClick={() => void download("csv")}>
+              {downloading === "csv" ? "CSV…" : "CSV"}
+            </Button>
+            <Button variant="outline" disabled={downloading !== null} onClick={() => void download("xlsx")}>
+              {downloading === "xlsx" ? "Excel…" : "Excel"}
+            </Button>
+            <Button variant="outline" disabled={downloading !== null} onClick={() => void download("pdf")}>
+              {downloading === "pdf" ? "PDF…" : "PDF"}
+            </Button>
           </>
         }
       />

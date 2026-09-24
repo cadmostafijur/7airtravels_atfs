@@ -4,10 +4,47 @@ import { requireApiSession } from "@/lib/auth/guards";
 import { jsonError } from "@/lib/http";
 import { buildReport, exportMatrix } from "@/lib/attendance/reports";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
   return text;
+}
+
+/** Helvetica is WinAnsi-only. Punch labels use → · — which crash drawText. */
+function pdfSafe(value: unknown): string {
+  const text = String(value ?? "")
+    .replaceAll("→", "->")
+    .replaceAll("←", "<-")
+    .replaceAll("·", " | ")
+    .replaceAll("•", "*")
+    .replaceAll("—", "-")
+    .replaceAll("–", "-")
+    .replaceAll("…", "...")
+    .replaceAll("’", "'")
+    .replaceAll("‘", "'")
+    .replaceAll("“", '"')
+    .replaceAll("”", '"');
+  return [...text]
+    .map((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      if (code >= 0x20 && code <= 0x7e) return ch;
+      if (code >= 0xa0 && code <= 0xff) return ch;
+      if (code === 0x09 || code === 0x0a || code === 0x0d) return " ";
+      return "?";
+    })
+    .join("");
+}
+
+function fileResponse(body: BodyInit, contentType: string, filename: string) {
+  return new Response(body, {
+    headers: {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
 }
 
 export async function GET(request: Request) {
@@ -33,12 +70,11 @@ export async function GET(request: Request) {
       sheet.addRow(header);
       rows.forEach((line) => sheet.addRow(line));
       const buffer = await workbook.xlsx.writeBuffer();
-      return new Response(buffer, {
-        headers: {
-          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename=${filename}.xlsx`,
-        },
-      });
+      return fileResponse(
+        Buffer.from(buffer),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        `${filename}.xlsx`,
+      );
     }
 
     if (format === "pdf") {
@@ -46,34 +82,24 @@ export async function GET(request: Request) {
       let page = doc.addPage([842, 595]);
       const font = await doc.embedFont(StandardFonts.Helvetica);
       let y = 560;
-      page.drawText(`7 Air Travels — ${report.type} attendance report`, { x: 40, y, size: 14, font });
+      page.drawText(pdfSafe(`7 Air Travels - ${report.type} attendance report`), { x: 40, y, size: 14, font });
       y -= 24;
-      page.drawText(header.join(" | "), { x: 40, y, size: 8, font });
+      page.drawText(pdfSafe(header.join(" | ")), { x: 40, y, size: 8, font });
       y -= 14;
       for (const line of rows) {
         if (y < 40) {
           page = doc.addPage([842, 595]);
           y = 560;
         }
-        page.drawText(line.join(" | ").slice(0, 140), { x: 40, y, size: 8, font });
+        page.drawText(pdfSafe(line.join(" | ")).slice(0, 140), { x: 40, y, size: 8, font });
         y -= 12;
       }
       const bytes = await doc.save();
-      return new Response(Buffer.from(bytes), {
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename=${filename}.pdf`,
-        },
-      });
+      return fileResponse(Buffer.from(bytes), "application/pdf", `${filename}.pdf`);
     }
 
     const csv = [header, ...rows].map((line) => line.map(csvEscape).join(",")).join("\n");
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename=${filename}.csv`,
-      },
-    });
+    return fileResponse(csv, "text/csv; charset=utf-8", `${filename}.csv`);
   } catch (error) {
     return jsonError(error);
   }
