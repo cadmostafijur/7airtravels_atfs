@@ -45,6 +45,7 @@ async function main() {
       lateThreshold: "10:10",
       officeEnd: "19:00",
       overtimeAfter: "19:00",
+      weekendDays: [5],
     },
     create: {
       name: "General Office",
@@ -54,7 +55,7 @@ async function main() {
       officeEnd: "19:00",
       halfDayAfter: "13:00",
       overtimeAfter: "19:00",
-      weekendDays: [5, 6],
+      weekendDays: [5],
       timezone: process.env.APP_TIMEZONE ?? "Asia/Dhaka",
     },
   });

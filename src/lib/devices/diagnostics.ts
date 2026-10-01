@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { createDeviceAdapter } from "@/lib/devices/factory";
-import { probeTcp } from "@/lib/devices/tcp-probe";
+import { acquireDeviceLock, isDeviceBusy } from "@/lib/devices/device-lock";
 import type { DeviceAdapter, DeviceAttendanceLog, DeviceInfo, DeviceUser } from "@/lib/devices/types";
 import { DeviceError, publicErrorMessage } from "@/lib/errors";
 import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
@@ -11,6 +11,7 @@ import type { Device, Prisma } from "@prisma/client";
 
 /** Website/VPS cannot reach the office K50A — only the LAN worker may mark OFFLINE. */
 async function markDeviceOffline(deviceId: string, message: string) {
+  if (isDeviceBusy(new Error(message))) return;
   if (process.env.ATFS_IS_WORKER !== "true") {
     logger.warn("skip_offline_status_from_web", {
       deviceId,
@@ -37,17 +38,6 @@ async function commLog(
   });
 }
 
-/**
- * A TCP handshake needs seconds, not the full ZK read budget. Capping it keeps a
- * dead VPN tunnel from stalling every sync cycle for the whole device timeout,
- * while still allowing for tunnel latency.
- */
-function tcpProbeTimeoutMs(device: Device): number {
-  const configured = Number(process.env.K50A_TCP_PROBE_TIMEOUT_MS ?? 8000);
-  const ceiling = device.timeoutMs > 0 ? device.timeoutMs : configured;
-  return Math.min(Math.max(configured, 1000), ceiling);
-}
-
 export async function withDevice<T>(
   device: Device,
   fn: (adapter: DeviceAdapter) => Promise<T>,
@@ -59,23 +49,8 @@ export async function withDevice<T>(
       data: { timeoutMs: 60_000 },
     });
   }
-  // Preflight: across the VPN a dead tunnel would otherwise burn the full ZK
-  // timeout (and its retries) on every sync cycle. A few seconds of TCP tells us
-  // the same thing, and names the hop that broke.
-  if (device.adapterType !== "mock") {
-    const reachable = await probeTcp(device.ipAddress, device.port, tcpProbeTimeoutMs(device));
-    if (!reachable.ok) {
-      const message = [reachable.error ?? "TCP probe failed", reachable.hint].filter(Boolean).join(" — ");
-      await markDeviceOffline(device.id, message);
-      await commLog(device.id, "TCP_PREFLIGHT", false, message, { ...reachable });
-      throw new DeviceError(
-        `K50A unreachable at ${device.ipAddress}:${device.port}. ${reachable.hint ?? ""}`.trim(),
-        reachable.diagnosis ?? "unreachable",
-        503,
-      );
-    }
-  }
 
+  const lock = device.adapterType === "mock" ? null : await acquireDeviceLock(device.ipAddress);
   const adapter = createDeviceAdapter(device.adapterType, {
     ipAddress: device.ipAddress,
     port: device.port,
@@ -83,49 +58,43 @@ export async function withDevice<T>(
     commKey: device.commKey,
   });
   try {
-    await adapter.connect();
-  } catch (error) {
-    const message = extractDeviceErrorMessage(error, publicErrorMessage(error));
-    await markDeviceOffline(device.id, message);
-    throw error;
-  }
-  try {
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { status: "ONLINE", lastConnectedAt: new Date(), lastError: null },
-    });
-    return await fn(adapter);
+    try {
+      await adapter.connect();
+    } catch (error) {
+      if (!isDeviceBusy(error)) {
+        const message = extractDeviceErrorMessage(error, publicErrorMessage(error));
+        await markDeviceOffline(device.id, message);
+      }
+      throw error;
+    }
+    try {
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { status: "ONLINE", lastConnectedAt: new Date(), lastError: null },
+      });
+      return await fn(adapter);
+    } finally {
+      await adapter.disconnect();
+    }
   } finally {
-    await adapter.disconnect();
+    await lock?.release();
   }
 }
 
 export async function testDeviceConnection(device: Device) {
   const started = Date.now();
-  const tcp = await probeTcp(device.ipAddress, device.port, tcpProbeTimeoutMs(device));
-  await commLog(device.id, "TCP_PROBE", tcp.ok, tcp.ok ? `TCP open in ${tcp.latencyMs}ms` : tcp.error ?? "TCP failed", {
-    ...tcp,
-  });
-
-  if (!tcp.ok) {
-    // Over the VPN the hint names the broken hop; without it every failure reads the same.
-    const message = [tcp.error ?? "TCP probe failed", tcp.hint].filter(Boolean).join(" — ");
-    await markDeviceOffline(device.id, message);
-    return {
-      tcp,
-      protocol: null as null,
-      info: null as DeviceInfo | null,
-      connected: false,
-      elapsedMs: Date.now() - started,
-      message,
-    };
-  }
-
   try {
     const info = await withDevice(device, async (adapter) => adapter.getDeviceInfo());
+    const elapsedMs = Date.now() - started;
     await commLog(device.id, "TEST_CONNECTION", true, "K50A protocol handshake succeeded", { info });
     return {
-      tcp,
+      tcp: {
+        ok: true,
+        ipAddress: device.ipAddress,
+        port: device.port,
+        latencyMs: elapsedMs,
+        diagnosis: "ok" as const,
+      },
       protocol: info.protocol ?? "unknown",
       info,
       connected: true,
@@ -139,14 +108,24 @@ export async function testDeviceConnection(device: Device) {
     const message = publicErrorMessage(error);
     logger.error("device_test_failed", { deviceId: device.id, message });
     await commLog(device.id, "TEST_CONNECTION", false, message);
-    await markDeviceOffline(device.id, message);
+    if (!isDeviceBusy(error)) await markDeviceOffline(device.id, message);
     return {
-      tcp,
+      tcp: {
+        ok: false,
+        ipAddress: device.ipAddress,
+        port: device.port,
+        latencyMs: Date.now() - started,
+        error: message,
+        diagnosis: isDeviceBusy(error) ? ("busy" as const) : ("no_reply" as const),
+        hint: isDeviceBusy(error)
+          ? "Another sync already has the only connection. The terminal is still online."
+          : "The terminal did not answer. It allows only one connection. Wait for the current sync to finish, and confirm the terminal is powered on at this IP.",
+      },
       protocol: null,
       info: null,
       connected: false,
       elapsedMs: Date.now() - started,
-      message: `TCP is reachable, but the ZK protocol handshake failed: ${message}`,
+      message,
     };
   }
 }

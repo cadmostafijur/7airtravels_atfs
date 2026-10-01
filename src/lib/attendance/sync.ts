@@ -9,6 +9,7 @@ import { notifyAttendanceSms } from "@/lib/sms/service";
 import { publishAttendance } from "@/lib/realtime/publisher";
 import { logger } from "@/lib/logger";
 import { extractDeviceErrorMessage } from "@/lib/devices/zk-error";
+import { isDeviceBusy } from "@/lib/devices/device-lock";
 import { DeviceError, publicErrorMessage } from "@/lib/errors";
 
 export type IngestResult = {
@@ -120,7 +121,7 @@ export async function ingestAttendanceLog(input: {
   }
 }
 
-export async function syncDeviceAttendance(deviceId: string) {
+export async function syncDeviceAttendance(deviceId: string, options?: { full?: boolean }) {
   return withPrisma(async (db) => {
   const device = await db.device.findUnique({ where: { id: deviceId } });
   if (!device) throw new Error("Device not found");
@@ -140,12 +141,20 @@ export async function syncDeviceAttendance(deviceId: string) {
     // Newest first so the latest fingerprint gets SMS before older backlog
     const ordered = [...logs].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     recordsRead = ordered.length;
+    let skippedInARow = 0;
     for (const log of ordered) {
       const result = await ingestAttendanceLog({ device, log, source: device.adapterType === "mock" ? "SIMULATION" : "DEVICE" });
-      if (result.inserted) recordsInserted += 1;
-      else if (result.skipped) recordsSkipped += 1;
-      else {
+      if (result.inserted) {
+        recordsInserted += 1;
+        skippedInARow = 0;
+      } else if (result.skipped) {
+        recordsSkipped += 1;
+        skippedInARow += 1;
+        // Newest punches are saved first. A run of punches already stored means the rest of this log is already on the server.
+        if (!options?.full && skippedInARow >= 40) break;
+      } else {
         recordsFailed += 1;
+        skippedInARow = 0;
         logger.warn("sync_record_failed", { deviceId, error: result.failed });
       }
     }
@@ -191,7 +200,7 @@ export async function syncDeviceAttendance(deviceId: string) {
         errorMessage,
       },
     });
-    if (process.env.ATFS_IS_WORKER === "true") {
+    if (process.env.ATFS_IS_WORKER === "true" && !isDeviceBusy(error)) {
       await db.device.update({
         where: { id: device.id },
         data: { status: "OFFLINE", lastError: errorMessage },

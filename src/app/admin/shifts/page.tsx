@@ -48,7 +48,7 @@ export default function ShiftsPage() {
       <PageHeader
         eyebrow="Rules"
         title="Shifts"
-        description="Check-in after the late time counts as late. 10:10 means 10:10 is on time and 10:11 is late. Friday and Saturday are the default weekends; tick the days the office is closed."
+        description="Check-in after the late time counts as late. 10:10 means 10:10 is on time and 10:11 is late. Friday is the weekly closed day. Saturday is a working day."
       />
       <div className="grid gap-4">
         {shifts.map((shift) => (

@@ -190,6 +190,11 @@ export class K50AAdapter implements DeviceAdapter {
       }
     } catch (error) {
       this.connected = false;
+      try {
+        await this.zk?.disconnect();
+      } catch {
+        // The terminal keeps a dead session if we drop the socket without disconnect.
+      }
       this.zk = null;
       throw wrapZkError(error, `K50A handshake failed at ${this.config.ipAddress}:${this.config.port}`);
     }

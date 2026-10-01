@@ -228,7 +228,7 @@ model Shift {
   officeEnd       String
   halfDayAfter    String                   @default("13:00")
   overtimeAfter   String                   @default("18:30")
-  weekendDays     Int[]                    @default([5, 6])
+  weekendDays     Int[]                    @default([5])
   timezone        String                   @default("Asia/Dhaka")
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt

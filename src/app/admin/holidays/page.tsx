@@ -29,7 +29,7 @@ function daysInMonth(month: string) {
 
 export default function HolidaysPage() {
   const [rows, setRows] = useState<Holiday[]>([]);
-  const [weekendDays, setWeekendDays] = useState<number[]>([5, 6]);
+  const [weekendDays, setWeekendDays] = useState<number[]>([5]);
   const [month, setMonth] = useState(monthKey);
   const [name, setName] = useState("Holiday");
   const [busy, setBusy] = useState<string | null>(null);

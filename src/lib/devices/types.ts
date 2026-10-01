@@ -65,6 +65,7 @@ export type TcpProbeDiagnosis =
   | "ok"
   | "tunnel_down"
   | "no_reply"
+  | "busy"
   | "port_closed"
   | "bad_address"
   | "unknown";

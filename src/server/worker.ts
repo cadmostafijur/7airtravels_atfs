@@ -4,17 +4,47 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { syncDeviceAttendance } from "@/lib/attendance/sync";
-import { probeTcp } from "@/lib/devices/tcp-probe";
 import type { LiveAttendanceEvent } from "@/lib/realtime/events";
 
 const syncing = new Set<string>();
 /** Consecutive failed cycles. A dead K50A was being dialed every 45s (tens of thousands of connects), which freezes these terminals so new punches never upload. */
 let failureStreak = 0;
 
+const OFFICE_END_MINUTES = 19 * 60;
+const CATCHUP_FROM_MINUTES = 17 * 60;
+
+function dhakaClock(at = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(at);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "0";
+  return {
+    date: `${value("year")}-${value("month")}-${value("day")}`,
+    minutes: Number(value("hour")) * 60 + Number(value("minute")),
+  };
+}
+
+/** Full device read already stored for this Dhaka date. */
+let fullSyncDate: string | null = null;
+
 function nextDelayMs() {
+  const clock = dhakaClock();
+  const beforeClose = clock.minutes < OFFICE_END_MINUTES;
   const base = Math.max(env.syncIntervalMs, 15_000);
-  if (failureStreak <= 0) return base;
+  if (beforeClose && failureStreak > 0) return 60_000;
+  if (failureStreak <= 0) return beforeClose ? base : 5 * 60 * 1000;
   return Math.min(base * 2 ** Math.min(failureStreak, 5), 10 * 60 * 1000);
+}
+
+function needsFullSync(clock = dhakaClock()) {
+  if (fullSyncDate === clock.date) return false;
+  return clock.minutes >= CATCHUP_FROM_MINUTES && clock.minutes < OFFICE_END_MINUTES;
 }
 
 /** Last completed sync attempt, so /health can report tunnel state without polling the device. */
@@ -29,23 +59,14 @@ let lastSyncError: string | null = null;
  */
 async function deviceReachability() {
   const devices = await prisma.device.findMany({
-    select: { id: true, name: true, ipAddress: true, port: true, adapterType: true, status: true, lastSyncAt: true },
+    select: { id: true, name: true, ipAddress: true, port: true, adapterType: true, status: true, lastSyncAt: true, lastError: true },
   });
-  return Promise.all(
-    devices.map(async (device) => {
-      if (device.adapterType === "mock") {
-        return { ...device, reachable: true, diagnosis: "ok" as const, hint: undefined, latencyMs: 0 };
-      }
-      const probe = await probeTcp(device.ipAddress, device.port, 8000);
-      return {
-        ...device,
-        reachable: probe.ok,
-        diagnosis: probe.diagnosis,
-        hint: probe.hint,
-        latencyMs: probe.latencyMs,
-      };
-    }),
-  );
+  return devices.map((device) => ({
+    ...device,
+    reachable: device.adapterType === "mock" || device.status === "ONLINE",
+    diagnosis: device.status === "ONLINE" ? "ok" : "no_reply",
+    hint: device.lastError,
+  }));
 }
 
 async function syncAllDevices() {
@@ -63,15 +84,19 @@ async function syncAllDevices() {
   lastSyncAt = new Date();
   let anyOk = false;
   let anyFailed = false;
+  let requestedFull = false;
   for (const device of devices) {
     if (syncing.has(device.id)) continue;
     syncing.add(device.id);
     try {
-      const result = await syncDeviceAttendance(device.id);
+      const full = needsFullSync();
+      if (full) requestedFull = true;
+      const result = await syncDeviceAttendance(device.id, { full });
+      if (full && result.status !== "SUCCESS") anyFailed = true;
       anyOk = true;
       lastSyncOk = true;
       lastSyncError = null;
-      logger.info("scheduled_sync", { deviceId: device.id, ...result });
+      logger.info("scheduled_sync", { deviceId: device.id, full, ...result });
     } catch (error) {
       anyFailed = true;
       const message = error instanceof Error ? error.message : String(error);
@@ -82,6 +107,7 @@ async function syncAllDevices() {
       syncing.delete(device.id);
     }
   }
+  if (requestedFull && anyOk && !anyFailed) fullSyncDate = dhakaClock().date;
   if (devices.length === 0 || (anyOk && !anyFailed)) failureStreak = 0;
   else if (anyFailed) failureStreak += 1;
 }
@@ -117,6 +143,9 @@ async function main() {
           lastSyncAt: lastSyncAt?.toISOString() ?? null,
           lastSyncOk,
           lastSyncError,
+          deadline: "19:00 Asia/Dhaka",
+          fullSyncDate,
+          dhaka: dhakaClock(),
         }),
       );
       return;

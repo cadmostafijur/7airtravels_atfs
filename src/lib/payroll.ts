@@ -53,7 +53,7 @@ type Calc = {
 
 async function monthContext(month: string) {
   const shift = await prisma.shift.findFirst({ where: { isDefault: true } });
-  const weekendDays = shift?.weekendDays ?? [5, 6];
+  const weekendDays = shift?.weekendDays ?? [5];
   const { start, end } = monthBounds(month);
   const holidays = await prisma.holiday.findMany({
     where: { date: { gte: start, lte: end } },

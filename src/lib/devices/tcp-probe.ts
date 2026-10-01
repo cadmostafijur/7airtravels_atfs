@@ -70,7 +70,7 @@ export function probeTcp(ipAddress: string, port: number, timeoutMs = 4000): Pro
         latencyMs: Date.now() - started,
         error: `TCP timeout after ${timeoutMs}ms`,
         diagnosis: "no_reply",
-        hint: "The route exists but the K50A never replied. The terminal may be off, on another IP, or the router is not forwarding the VPN subnet to the LAN.",
+        hint: "The terminal did not answer. It allows only one connection, so a sync already in progress looks like a timeout. Wait for that sync to finish, and confirm the terminal is powered on at this IP.",
       });
     });
     socket.once("error", (error) => {
