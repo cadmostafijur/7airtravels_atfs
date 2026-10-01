@@ -8,6 +8,14 @@ import { probeTcp } from "@/lib/devices/tcp-probe";
 import type { LiveAttendanceEvent } from "@/lib/realtime/events";
 
 const syncing = new Set<string>();
+/** Consecutive failed cycles. A dead K50A was being dialed every 45s (tens of thousands of connects), which freezes these terminals so new punches never upload. */
+let failureStreak = 0;
+
+function nextDelayMs() {
+  const base = Math.max(env.syncIntervalMs, 15_000);
+  if (failureStreak <= 0) return base;
+  return Math.min(base * 2 ** Math.min(failureStreak, 5), 10 * 60 * 1000);
+}
 
 /** Last completed sync attempt, so /health can report tunnel state without polling the device. */
 let lastSyncAt: Date | null = null;
@@ -53,15 +61,19 @@ async function syncAllDevices() {
     return;
   }
   lastSyncAt = new Date();
+  let anyOk = false;
+  let anyFailed = false;
   for (const device of devices) {
     if (syncing.has(device.id)) continue;
     syncing.add(device.id);
     try {
       const result = await syncDeviceAttendance(device.id);
+      anyOk = true;
       lastSyncOk = true;
       lastSyncError = null;
       logger.info("scheduled_sync", { deviceId: device.id, ...result });
     } catch (error) {
+      anyFailed = true;
       const message = error instanceof Error ? error.message : String(error);
       lastSyncOk = false;
       lastSyncError = message;
@@ -70,6 +82,18 @@ async function syncAllDevices() {
       syncing.delete(device.id);
     }
   }
+  if (devices.length === 0 || (anyOk && !anyFailed)) failureStreak = 0;
+  else if (anyFailed) failureStreak += 1;
+}
+
+function scheduleSync() {
+  void syncAllDevices().finally(() => {
+    const delayMs = nextDelayMs();
+    if (failureStreak > 0) {
+      logger.info("scheduled_sync_backoff", { failureStreak, delayMs });
+    }
+    setTimeout(scheduleSync, delayMs);
+  });
 }
 
 async function main() {
@@ -150,10 +174,7 @@ async function main() {
     logger.info("worker_listening", { host: env.workerHost, port: env.workerPort });
   });
 
-  await syncAllDevices();
-  setInterval(() => {
-    void syncAllDevices();
-  }, env.syncIntervalMs);
+  scheduleSync();
 }
 
 void main().catch((error) => {

@@ -23,6 +23,11 @@ export function diagnoseSocketError(code: string | undefined, message: string): 
         diagnosis: "port_closed",
         hint: "The tunnel works and the host answered, but nothing is listening on that port. Confirm the K50A port (usually 4370) and that the terminal is powered on.",
       };
+    case "ETIMEDOUT":
+      return {
+        diagnosis: "no_reply",
+        hint: "The route to the office LAN exists, but the K50A did not answer. Power-cycle the terminal, confirm its IP is still the one saved on the device page, and check the router VPN is forwarding that LAN address.",
+      };
     case "ENOTFOUND":
     case "EAI_AGAIN":
       return {
