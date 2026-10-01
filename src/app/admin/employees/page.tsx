@@ -358,26 +358,10 @@ export default function EmployeesPage() {
               onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })}
             />
           </div>
-          <div>
-            <Label>Late penalty (Tk / day)</Label>
-            <Input
-              type="number"
-              min={0}
-              placeholder="Company default if empty"
-              value={form.latePenalty}
-              onChange={(e) => setForm({ ...form, latePenalty: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Absent penalty (Tk / day)</Label>
-            <Input
-              type="number"
-              min={0}
-              placeholder="Company default if empty"
-              value={form.absentPenalty}
-              onChange={(e) => setForm({ ...form, absentPenalty: e.target.value })}
-            />
-          </div>
+          <p className="text-xs text-muted md:col-span-2">
+            Month-end fine is calculated on Salary: every 3 absents count as 1 day, then (salary / working days) × that
+            count. You can change the fine there before marking the month paid.
+          </p>
           <div>
             <Label>Joining date (optional)</Label>
             <Input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} />

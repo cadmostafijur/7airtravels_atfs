@@ -137,6 +137,7 @@ model Employee {
   attendances    Attendance[]
   summaries      DailyAttendanceSummary[]
   leaves         Leave[]
+  payrollRecords PayrollRecord[]
 
   @@index([deviceUserId])
   @@index([departmentId, status])
@@ -345,10 +346,44 @@ model SystemSetting {
 }
 
 model PayrollSetting {
-  id            String   @id @default("default")
-  latePenalty   Int      @default(200)
-  absentPenalty Int      @default(500)
-  currency      String   @default("BDT")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default("default")
+  latePenalty     Int      @default(200)
+  absentPenalty   Int      @default(500)
+  /// Raw absent days divided by this number (rounded down) become the days used in the fine.
+  absentGroupSize Int      @default(3)
+  currency        String   @default("BDT")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum PayrollStatus {
+  DRAFT
+  PAID
+}
+
+model PayrollRecord {
+  id                String        @id @default(cuid())
+  employeeId        String
+  month             String
+  monthlySalary     Int
+  salaryOverridden  Boolean       @default(false)
+  workingDays       Int
+  presentDays       Int
+  lateDays          Int
+  absentDays        Int
+  countedAbsentDays Int
+  calculatedFine    Int
+  absentFine        Int
+  fineOverridden    Boolean       @default(false)
+  adjustedSalary    Int
+  status            PayrollStatus @default(DRAFT)
+  paidAt            DateTime?
+  note              String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  employee          Employee      @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, month])
+  @@index([month, status])
+  @@index([status, paidAt])
 }

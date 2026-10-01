@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { requireApiSession } from "@/lib/auth/guards";
 import { jsonError } from "@/lib/http";
 import { buildAttendancePdf } from "@/lib/attendance/pdf";
-import { buildMonthlyPayroll, currentPayrollMonth, taka } from "@/lib/payroll";
+import { buildMonthlyPayroll, currentPayrollMonth } from "@/lib/payroll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,24 +25,28 @@ export async function GET(request: Request) {
       "Code",
       "Department",
       "Base salary",
-      "Present days",
-      "Late days",
-      "Late penalty",
-      "Absent days",
-      "Absent penalty",
-      "Net payable",
+      "Working days",
+      "Present",
+      "Late",
+      "Absent",
+      "Counted absent",
+      "Absent fine",
+      "Adjusted salary",
+      "Status",
     ];
     const rows = report.rows.map((row) => [
       row.name,
       row.employeeCode,
       row.department,
       String(row.monthlySalary),
+      String(row.workingDays),
       String(row.presentDays),
       String(row.lateDays),
-      String(row.lateDeduction),
       String(row.absentDays),
-      String(row.absentDeduction),
-      String(row.netSalary),
+      String(row.countedAbsentDays),
+      String(row.absentFine),
+      String(row.adjustedSalary),
+      row.status,
     ]);
     rows.push([
       "TOTAL",
@@ -50,11 +54,13 @@ export async function GET(request: Request) {
       "",
       String(report.totals.monthlySalary),
       "",
+      "",
       String(report.totals.lateDays),
-      String(report.totals.lateDeduction),
       String(report.totals.absentDays),
-      String(report.totals.absentDeduction),
-      String(report.totals.netSalary),
+      String(report.totals.countedAbsentDays),
+      String(report.totals.absentFine),
+      String(report.totals.adjustedSalary),
+      "",
     ]);
     const filename = `payroll-${month}`;
 
@@ -81,7 +87,7 @@ export async function GET(request: Request) {
       const bytes = await buildAttendancePdf({
         type: "payroll",
         title: `Month-end payroll - ${month}`,
-        subtitle: `${report.from} to ${report.to}  |  Late penalty ${taka(report.settings.latePenalty)} / day  |  Absent penalty ${taka(report.settings.absentPenalty)} / day`,
+        subtitle: `${report.from} to ${report.to}  |  ${report.workingDays} working days  |  every ${report.settings.absentGroupSize} absents count as 1  |  fine = salary / working days x counted absents`,
         header,
         rows,
       });

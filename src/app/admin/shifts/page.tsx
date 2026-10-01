@@ -48,7 +48,7 @@ export default function ShiftsPage() {
       <PageHeader
         eyebrow="Rules"
         title="Shifts"
-        description="Office start, late threshold and end time are configurable. They are never hardcoded into attendance processing."
+        description="Check-in after the late time counts as late. 10:10 means 10:10 is on time and 10:11 is late. Friday and Saturday are the default weekends; tick the days the office is closed."
       />
       <div className="grid gap-4">
         {shifts.map((shift) => (
@@ -69,7 +69,7 @@ export default function ShiftsPage() {
                 />
               </div>
               <div>
-                <Label>Late after</Label>
+                <Label>Late after (HH:MM)</Label>
                 <Input
                   value={shift.lateThreshold}
                   onChange={(e) =>
@@ -90,8 +90,36 @@ export default function ShiftsPage() {
                   }
                 />
               </div>
-              <div className="md:col-span-3 text-xs text-muted">
-                Weekend: {shift.weekendDays.map((d) => dayNames[d]).join(", ")}
+              <div className="md:col-span-3">
+                <Label>Closed days</Label>
+                <div className="flex flex-wrap gap-2">
+                  {dayNames.map((name, index) => {
+                    const on = shift.weekendDays.includes(index);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${on ? "border-teal bg-teal text-white" : "border-line bg-white text-muted"}`}
+                        onClick={() =>
+                          setShifts((rows) =>
+                            rows.map((row) =>
+                              row.id === shift.id
+                                ? {
+                                    ...row,
+                                    weekendDays: on
+                                      ? row.weekendDays.filter((day) => day !== index)
+                                      : [...row.weekendDays, index].sort(),
+                                  }
+                                : row,
+                            ),
+                          )
+                        }
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <Button onClick={() => save(shift)}>Save rules</Button>
             </CardContent>

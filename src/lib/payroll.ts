@@ -1,112 +1,311 @@
 import "server-only";
 
+import type { PayrollRecord, PayrollStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
+import { minutesOfDay, parseHm } from "@/lib/time";
+import {
+  absentFineAmount,
+  adjustedSalaryAmount,
+  countedAbsentDays,
+  monthDateKeys,
+  workingDayKeys,
+} from "@/lib/payroll-rules";
 
 export function taka(value: number) {
   return `Tk ${Math.round(value).toLocaleString("en-BD")}`;
 }
 
 export function currentPayrollMonth(at = new Date()) {
-  const year = at.getFullYear();
-  const month = String(at.getMonth() + 1).padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(at);
+  const year = parts.find((part) => part.type === "year")?.value ?? String(at.getUTCFullYear());
+  const month = parts.find((part) => part.type === "month")?.value ?? String(at.getUTCMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
 }
 
 function monthBounds(month: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!match) {
-    const fallback = currentPayrollMonth();
-    return monthBounds(fallback);
-  }
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]);
-  const start = new Date(Date.UTC(year, monthIndex - 1, 1));
-  const end = new Date(Date.UTC(year, monthIndex, 0));
-  return { start, end };
+  const safe = match ? month : currentPayrollMonth();
+  const [year, monthText] = safe.split("-");
+  const start = new Date(`${year}-${monthText}-01T00:00:00.000Z`);
+  const endKey = monthDateKeys(safe).at(-1) ?? `${year}-${monthText}-01`;
+  const end = new Date(`${endKey}T00:00:00.000Z`);
+  return { month: safe, start, end };
 }
+
+const PRESENT = new Set(["PRESENT", "LATE", "OVERTIME", "EARLY_LEAVE", "HALF_DAY"]);
 
 export async function getPayrollSettings() {
   return prisma.payrollSetting.upsert({
     where: { id: "default" },
-    create: { id: "default", latePenalty: 200, absentPenalty: 500 },
+    create: { id: "default", latePenalty: 0, absentPenalty: 0, absentGroupSize: 3 },
     update: {},
   });
 }
 
+type Calc = {
+  monthlySalary: number;
+  workingDays: number;
+  presentDays: number;
+  lateDays: number;
+  absentDays: number;
+  countedAbsentDays: number;
+  calculatedFine: number;
+};
+
+async function monthContext(month: string) {
+  const settings = await getPayrollSettings();
+  const shift = await prisma.shift.findFirst({ where: { isDefault: true } });
+  const weekendDays = shift?.weekendDays ?? [5, 6];
+  const lateAfter = parseHm(shift?.lateThreshold || "10:10");
+  const { start, end } = monthBounds(month);
+  const holidays = await prisma.holiday.findMany({
+    where: { date: { gte: start, lte: end } },
+    select: { date: true },
+  });
+  const holidayKeys = holidays.map((row) => row.date.toISOString().slice(0, 10));
+  const workingDays = workingDayKeys(month, weekendDays, holidayKeys).length;
+  return { settings, shift, lateAfter, start, end, workingDays, weekendDays };
+}
+
+function statsFor(
+  summaries: Array<{ status: string; checkInAt: Date | null }>,
+  lateAfter: number,
+  salary: number,
+  workingDays: number,
+  groupSize: number,
+): Calc {
+  const absentDays = summaries.filter((row) => row.status === "ABSENT").length;
+  const presentDays = summaries.filter((row) => PRESENT.has(row.status)).length;
+  const lateDays = summaries.filter((row) => {
+    if (!row.checkInAt) return row.status === "LATE";
+    return minutesOfDay(row.checkInAt) > lateAfter;
+  }).length;
+  const counted = countedAbsentDays(absentDays, groupSize);
+  return {
+    monthlySalary: salary,
+    workingDays,
+    presentDays,
+    lateDays,
+    absentDays,
+    countedAbsentDays: counted,
+    calculatedFine: absentFineAmount(salary, workingDays, counted),
+  };
+}
+
 export type PayrollRow = {
   id: string;
+  employeeId: string;
   employeeCode: string;
   name: string;
   department: string;
+  month: string;
   monthlySalary: number;
-  latePenalty: number;
-  absentPenalty: number;
-  usingDefaultLate: boolean;
-  usingDefaultAbsent: boolean;
+  salaryOverridden: boolean;
+  workingDays: number;
+  presentDays: number;
   lateDays: number;
   absentDays: number;
-  presentDays: number;
-  lateDeduction: number;
-  absentDeduction: number;
-  netSalary: number;
+  countedAbsentDays: number;
+  calculatedFine: number;
+  absentFine: number;
+  fineOverridden: boolean;
+  adjustedSalary: number;
+  status: PayrollStatus;
+  paidAt: string | null;
+  note: string | null;
 };
 
+function toRow(
+  record: PayrollRecord & { employee: { employeeCode: string; name: string; department: { name: string } | null } },
+): PayrollRow {
+  return {
+    id: record.id,
+    employeeId: record.employeeId,
+    employeeCode: record.employee.employeeCode,
+    name: record.employee.name,
+    department: record.employee.department?.name ?? "",
+    month: record.month,
+    monthlySalary: record.monthlySalary,
+    salaryOverridden: record.salaryOverridden,
+    workingDays: record.workingDays,
+    presentDays: record.presentDays,
+    lateDays: record.lateDays,
+    absentDays: record.absentDays,
+    countedAbsentDays: record.countedAbsentDays,
+    calculatedFine: record.calculatedFine,
+    absentFine: record.absentFine,
+    fineOverridden: record.fineOverridden,
+    adjustedSalary: record.adjustedSalary,
+    status: record.status,
+    paidAt: record.paidAt?.toISOString() ?? null,
+    note: record.note,
+  };
+}
+
 export async function buildMonthlyPayroll(month: string) {
-  const settings = await getPayrollSettings();
-  const { start, end } = monthBounds(month);
+  const ctx = await monthContext(month);
+  const { month: safe, start, end } = monthBounds(month);
   const employees = await prisma.employee.findMany({
     where: { status: "ACTIVE" },
     include: {
       department: true,
       summaries: {
         where: { workDate: { gte: start, lte: end } },
-        select: { status: true },
+        select: { status: true, checkInAt: true },
       },
+      payrollRecords: { where: { month: safe } },
     },
     orderBy: { name: "asc" },
   });
 
-  const rows: PayrollRow[] = employees.map((employee) => {
-    const lateDays = employee.summaries.filter((row) => row.status === "LATE").length;
-    const absentDays = employee.summaries.filter((row) => row.status === "ABSENT").length;
-    const presentDays = employee.summaries.filter((row) =>
-      ["PRESENT", "LATE", "OVERTIME", "EARLY_LEAVE", "HALF_DAY"].includes(row.status),
-    ).length;
-    const latePenalty = employee.latePenalty ?? settings.latePenalty;
-    const absentPenalty = employee.absentPenalty ?? settings.absentPenalty;
-    const lateDeduction = lateDays * latePenalty;
-    const absentDeduction = absentDays * absentPenalty;
-    const monthlySalary = employee.monthlySalary;
-    return {
-      id: employee.id,
-      employeeCode: employee.employeeCode,
-      name: employee.name,
-      department: employee.department?.name ?? "",
+  const rows: PayrollRow[] = [];
+  for (const employee of employees) {
+    const calc = statsFor(
+      employee.summaries,
+      ctx.lateAfter,
+      employee.monthlySalary,
+      ctx.workingDays,
+      ctx.settings.absentGroupSize,
+    );
+    const existing = employee.payrollRecords[0];
+    if (existing?.status === "PAID") {
+      rows.push(toRow({ ...existing, employee }));
+      continue;
+    }
+
+    const monthlySalary = existing?.salaryOverridden ? existing.monthlySalary : calc.monthlySalary;
+    const calculatedFine = absentFineAmount(monthlySalary, calc.workingDays, calc.countedAbsentDays);
+    const absentFine = existing?.fineOverridden ? existing.absentFine : calculatedFine;
+    const data = {
       monthlySalary,
-      latePenalty,
-      absentPenalty,
-      usingDefaultLate: employee.latePenalty == null,
-      usingDefaultAbsent: employee.absentPenalty == null,
-      lateDays,
-      absentDays,
-      presentDays,
-      lateDeduction,
-      absentDeduction,
-      netSalary: Math.max(0, monthlySalary - lateDeduction - absentDeduction),
+      workingDays: calc.workingDays,
+      presentDays: calc.presentDays,
+      lateDays: calc.lateDays,
+      absentDays: calc.absentDays,
+      countedAbsentDays: calc.countedAbsentDays,
+      calculatedFine,
+      absentFine,
+      adjustedSalary: adjustedSalaryAmount(monthlySalary, absentFine),
     };
-  });
+
+    const saved = existing
+      ? await prisma.payrollRecord.update({ where: { id: existing.id }, data })
+      : await prisma.payrollRecord.create({
+          data: {
+            employeeId: employee.id,
+            month: safe,
+            ...data,
+          },
+        });
+    rows.push(toRow({ ...saved, employee }));
+  }
 
   const totals = rows.reduce(
     (acc, row) => ({
       monthlySalary: acc.monthlySalary + row.monthlySalary,
       lateDays: acc.lateDays + row.lateDays,
       absentDays: acc.absentDays + row.absentDays,
-      lateDeduction: acc.lateDeduction + row.lateDeduction,
-      absentDeduction: acc.absentDeduction + row.absentDeduction,
-      netSalary: acc.netSalary + row.netSalary,
+      countedAbsentDays: acc.countedAbsentDays + row.countedAbsentDays,
+      absentFine: acc.absentFine + row.absentFine,
+      adjustedSalary: acc.adjustedSalary + row.adjustedSalary,
+      paid: acc.paid + (row.status === "PAID" ? 1 : 0),
     }),
-    { monthlySalary: 0, lateDays: 0, absentDays: 0, lateDeduction: 0, absentDeduction: 0, netSalary: 0 },
+    { monthlySalary: 0, lateDays: 0, absentDays: 0, countedAbsentDays: 0, absentFine: 0, adjustedSalary: 0, paid: 0 },
   );
 
-  return { month, settings, rows, totals, from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+  return {
+    month: safe,
+    from: start.toISOString().slice(0, 10),
+    to: end.toISOString().slice(0, 10),
+    workingDays: ctx.workingDays,
+    lateAfter: ctx.shift?.lateThreshold ?? "10:10",
+    weekendDays: ctx.weekendDays,
+    settings: {
+      absentGroupSize: ctx.settings.absentGroupSize,
+    },
+    rows,
+    totals,
+  };
+}
+
+export async function updatePayrollRecord(
+  id: string,
+  input: {
+    absentFine?: number;
+    monthlySalary?: number;
+    note?: string | null;
+    useCalculatedFine?: boolean;
+    status?: PayrollStatus;
+  },
+) {
+  const record = await prisma.payrollRecord.findUnique({ where: { id } });
+  if (!record) return null;
+  if (record.status === "PAID" && input.status !== "DRAFT") {
+    throw new AppError("This salary is already marked paid. Mark it unpaid before changing the figures.", 409);
+  }
+
+  let monthlySalary = input.monthlySalary ?? record.monthlySalary;
+  let salaryOverridden = record.salaryOverridden || input.monthlySalary != null;
+  let fineOverridden = record.fineOverridden;
+  let absentFine = record.absentFine;
+  let calculatedFine = record.calculatedFine;
+
+  if (input.useCalculatedFine) {
+    fineOverridden = false;
+    calculatedFine = absentFineAmount(monthlySalary, record.workingDays, record.countedAbsentDays);
+    absentFine = calculatedFine;
+  } else if (input.monthlySalary != null && !fineOverridden) {
+    calculatedFine = absentFineAmount(monthlySalary, record.workingDays, record.countedAbsentDays);
+    absentFine = calculatedFine;
+  }
+  if (input.absentFine != null && !input.useCalculatedFine) {
+    fineOverridden = true;
+    absentFine = input.absentFine;
+  }
+  if (input.status === "DRAFT" && input.monthlySalary == null && !record.salaryOverridden) {
+    salaryOverridden = false;
+  }
+
+  const status = input.status ?? record.status;
+  return prisma.payrollRecord.update({
+    where: { id },
+    data: {
+      monthlySalary,
+      salaryOverridden,
+      calculatedFine,
+      absentFine,
+      fineOverridden,
+      adjustedSalary: adjustedSalaryAmount(monthlySalary, absentFine),
+      note: input.note === undefined ? record.note : input.note,
+      status,
+      paidAt: status === "PAID" ? record.paidAt ?? new Date() : null,
+    },
+  });
+}
+
+export async function payrollHistory(month?: string) {
+  const records = await prisma.payrollRecord.findMany({
+    where: {
+      status: "PAID",
+      ...(month ? { month } : {}),
+    },
+    include: { employee: { include: { department: true } } },
+    orderBy: [{ paidAt: "desc" }, { employee: { name: "asc" } }],
+  });
+  const rows = records.map((record) => toRow(record));
+  const totals = rows.reduce(
+    (acc, row) => ({
+      slips: acc.slips + 1,
+      monthlySalary: acc.monthlySalary + row.monthlySalary,
+      absentFine: acc.absentFine + row.absentFine,
+      adjustedSalary: acc.adjustedSalary + row.adjustedSalary,
+    }),
+    { slips: 0, monthlySalary: 0, absentFine: 0, adjustedSalary: 0 },
+  );
+  return { month: month ?? null, rows, totals };
 }

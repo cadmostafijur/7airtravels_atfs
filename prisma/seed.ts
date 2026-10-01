@@ -42,14 +42,14 @@ async function main() {
     update: {
       isDefault: true,
       officeStart: "09:00",
-      lateThreshold: "09:15",
+      lateThreshold: "10:10",
       officeEnd: "18:00",
     },
     create: {
       name: "General Office",
       isDefault: true,
       officeStart: "09:00",
-      lateThreshold: "09:15",
+      lateThreshold: "10:10",
       officeEnd: "18:00",
       halfDayAfter: "13:00",
       overtimeAfter: "18:30",

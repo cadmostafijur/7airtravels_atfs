@@ -131,7 +131,7 @@ export async function processDailySummary(employeeId: string, at: Date) {
       const otMin = parseHm(shift.overtimeAfter);
       if (outMin < endMin) {
         earlyMinutes = endMin - outMin;
-        if (status === "PRESENT" || status === "LATE") status = "EARLY_LEAVE";
+        if (status === "PRESENT") status = "EARLY_LEAVE";
       }
       if (outMin >= otMin) {
         overtimeMinutes = outMin - otMin;

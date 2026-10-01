@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
@@ -10,39 +11,43 @@ import { api } from "@/lib/api";
 
 type PayrollRow = {
   id: string;
-  employeeCode: string;
   name: string;
+  employeeCode: string;
   department: string;
   monthlySalary: number;
-  latePenalty: number;
-  absentPenalty: number;
+  workingDays: number;
+  presentDays: number;
   lateDays: number;
   absentDays: number;
-  presentDays: number;
-  lateDeduction: number;
-  absentDeduction: number;
-  netSalary: number;
+  countedAbsentDays: number;
+  calculatedFine: number;
+  absentFine: number;
+  fineOverridden: boolean;
+  adjustedSalary: number;
+  status: "DRAFT" | "PAID";
 };
 
 type PayrollReport = {
   month: string;
   from: string;
   to: string;
-  settings: { latePenalty: number; absentPenalty: number };
+  workingDays: number;
+  lateAfter: string;
+  settings: { absentGroupSize: number };
   rows: PayrollRow[];
   totals: {
     monthlySalary: number;
     lateDays: number;
     absentDays: number;
-    lateDeduction: number;
-    absentDeduction: number;
-    netSalary: number;
+    countedAbsentDays: number;
+    absentFine: number;
+    adjustedSalary: number;
+    paid: number;
   };
 };
 
 function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit" }).format(new Date());
 }
 
 function taka(value: number) {
@@ -52,16 +57,17 @@ function taka(value: number) {
 export default function PayrollPage() {
   const [month, setMonth] = useState(currentMonth);
   const [report, setReport] = useState<PayrollReport | null>(null);
-  const [latePenalty, setLatePenalty] = useState("200");
-  const [absentPenalty, setAbsentPenalty] = useState("500");
+  const [groupSize, setGroupSize] = useState("3");
+  const [fines, setFines] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   async function load(nextMonth = month) {
     const data = await api<PayrollReport>(`/api/payroll?month=${nextMonth}`);
     setReport(data);
-    setLatePenalty(String(data.settings.latePenalty));
-    setAbsentPenalty(String(data.settings.absentPenalty));
+    setGroupSize(String(data.settings.absentGroupSize));
+    setFines(Object.fromEntries(data.rows.map((row) => [row.id, String(row.absentFine)])));
   }
 
   useEffect(() => {
@@ -70,17 +76,11 @@ export default function PayrollPage() {
     });
   }, [month]);
 
-  async function saveDefaults() {
+  async function saveRule() {
     setSaving(true);
     try {
-      await api("/api/payroll", {
-        method: "PUT",
-        body: JSON.stringify({
-          latePenalty: Number(latePenalty),
-          absentPenalty: Number(absentPenalty),
-        }),
-      });
-      toast.success("Company penalty defaults saved");
+      await api("/api/payroll", { method: "PUT", body: JSON.stringify({ absentGroupSize: Number(groupSize) }) });
+      toast.success("Absent rule saved");
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed");
@@ -89,12 +89,23 @@ export default function PayrollPage() {
     }
   }
 
+  async function patch(id: string, body: Record<string, unknown>, ok: string) {
+    setBusyId(id);
+    try {
+      await api(`/api/payroll/records/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+      toast.success(ok);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function download(format: "csv" | "xlsx" | "pdf") {
     setDownloading(format);
     try {
-      const response = await fetch(`/api/payroll/export?format=${format}&month=${month}`, {
-        credentials: "include",
-      });
+      const response = await fetch(`/api/payroll/export?format=${format}&month=${month}`, { credentials: "include" });
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) {
         const json = (await response.json()) as { error?: string };
@@ -121,10 +132,13 @@ export default function PayrollPage() {
     <div>
       <PageHeader
         eyebrow="Month-end"
-        title="Salary & penalties"
-        description="Set each employee's monthly salary on their record. Late and absent days deduct from that salary at month end."
+        title="Monthly payroll"
+        description="Each month gets one salary record per employee. Check-in after the shift late time counts as late. Every 3 absents count as 1, and the fine is salary divided by working days."
         actions={
           <>
+            <Link href="/admin/payroll/history">
+              <Button variant="navy">Salary summary</Button>
+            </Link>
             <Button variant="outline" disabled={downloading !== null} onClick={() => void download("csv")}>
               CSV
             </Button>
@@ -145,73 +159,116 @@ export default function PayrollPage() {
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
           <div>
-            <Label>Default late penalty (Tk / day)</Label>
-            <Input type="number" min={0} value={latePenalty} onChange={(e) => setLatePenalty(e.target.value)} />
+            <Label>Absents that count as 1</Label>
+            <Input type="number" min={1} value={groupSize} onChange={(e) => setGroupSize(e.target.value)} />
           </div>
-          <div>
-            <Label>Default absent penalty (Tk / day)</Label>
-            <Input type="number" min={0} value={absentPenalty} onChange={(e) => setAbsentPenalty(e.target.value)} />
-          </div>
-          <Button disabled={saving} onClick={() => void saveDefaults()}>
-            {saving ? "Saving…" : "Save defaults"}
+          <Button disabled={saving} onClick={() => void saveRule()}>
+            {saving ? "Saving…" : "Save rule"}
           </Button>
           <p className="w-full text-xs text-muted">
-            Example: salary Tk 10,000, late Tk {latePenalty || "200"}/day, absent Tk {absentPenalty || "500"}/day.
-            Override per employee on Employee records if needed.
+            Late after {report?.lateAfter ?? "10:10"} (change it on Shifts). This month has {report?.workingDays ?? "—"} working
+            days after Friday, Saturday, and holidays you mark on the calendar. Fine = (monthly salary / working days) × counted
+            absents. You can type a different fine on a row before marking it paid.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="bg-paper text-left text-xs uppercase text-muted">
               <tr>
                 <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3">Base salary</th>
+                <th className="px-4 py-3">Salary</th>
                 <th className="px-4 py-3">Present</th>
                 <th className="px-4 py-3">Late</th>
-                <th className="px-4 py-3">Late penalty</th>
                 <th className="px-4 py-3">Absent</th>
-                <th className="px-4 py-3">Absent penalty</th>
-                <th className="px-4 py-3">Net payable</th>
+                <th className="px-4 py-3">Counted</th>
+                <th className="px-4 py-3">Fine</th>
+                <th className="px-4 py-3">Adjusted</th>
+                <th className="px-4 py-3">Paid</th>
               </tr>
             </thead>
             <tbody>
-              {(report?.rows ?? []).map((row) => (
-                <tr key={row.id} className="border-t border-line">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold">{row.name}</div>
-                    <div className="text-xs text-muted">
-                      {row.employeeCode} · {row.department || "No dept"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{taka(row.monthlySalary)}</td>
-                  <td className="px-4 py-3">{row.presentDays}</td>
-                  <td className="px-4 py-3">{row.lateDays}</td>
-                  <td className="px-4 py-3 text-signal">{row.lateDeduction ? `-${taka(row.lateDeduction)}` : "—"}</td>
-                  <td className="px-4 py-3">{row.absentDays}</td>
-                  <td className="px-4 py-3 text-signal">{row.absentDeduction ? `-${taka(row.absentDeduction)}` : "—"}</td>
-                  <td className="px-4 py-3 font-semibold text-teal">{taka(row.netSalary)}</td>
-                </tr>
-              ))}
+              {(report?.rows ?? []).map((row) => {
+                const locked = row.status === "PAID";
+                return (
+                  <tr key={row.id} className="border-t border-line">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold">{row.name}</div>
+                      <div className="text-xs text-muted">
+                        {row.employeeCode}
+                        {row.department ? ` · ${row.department}` : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">{taka(row.monthlySalary)}</td>
+                    <td className="px-4 py-3">{row.presentDays}</td>
+                    <td className="px-4 py-3">{row.lateDays}</td>
+                    <td className="px-4 py-3">{row.absentDays}</td>
+                    <td className="px-4 py-3">{row.countedAbsentDays}</td>
+                    <td className="px-4 py-3">
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8 w-28"
+                        disabled={locked || busyId === row.id}
+                        value={fines[row.id] ?? String(row.absentFine)}
+                        onChange={(e) => setFines((current) => ({ ...current, [row.id]: e.target.value }))}
+                      />
+                      <div className="mt-1 flex gap-2 text-[11px]">
+                        {row.fineOverridden ? <span className="text-brass">Manual</span> : <span className="text-muted">Calculated {taka(row.calculatedFine)}</span>}
+                        {!locked ? (
+                          <>
+                            <button
+                              className="text-teal"
+                              onClick={() => void patch(row.id, { absentFine: Number(fines[row.id] ?? row.absentFine) }, "Fine saved")}
+                            >
+                              Save
+                            </button>
+                            {row.fineOverridden ? (
+                              <button className="text-muted" onClick={() => void patch(row.id, { useCalculatedFine: true }, "Fine reset")}>
+                                Reset
+                              </button>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-teal">{taka(row.adjustedSalary)}</td>
+                    <td className="px-4 py-3">
+                      {locked ? (
+                        <Button size="sm" variant="outline" disabled={busyId === row.id} onClick={() => void patch(row.id, { status: "DRAFT" }, "Marked unpaid")}>
+                          Paid
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          disabled={busyId === row.id}
+                          onClick={() => {
+                            const typed = Number(fines[row.id] ?? row.absentFine);
+                            const body: Record<string, unknown> = { status: "PAID" };
+                            if (Number.isFinite(typed) && typed !== row.absentFine) body.absentFine = typed;
+                            void patch(row.id, body, "Marked paid");
+                          }}
+                        >
+                          Mark paid
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {report ? (
                 <tr className="border-t-2 border-navy/20 bg-paper font-semibold">
-                  <td className="px-4 py-3">Total</td>
+                  <td className="px-4 py-3">Total · {report.totals.paid} paid</td>
                   <td className="px-4 py-3">{taka(report.totals.monthlySalary)}</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3">{report.totals.lateDays}</td>
-                  <td className="px-4 py-3 text-signal">-{taka(report.totals.lateDeduction)}</td>
                   <td className="px-4 py-3">{report.totals.absentDays}</td>
-                  <td className="px-4 py-3 text-signal">-{taka(report.totals.absentDeduction)}</td>
-                  <td className="px-4 py-3 text-teal">{taka(report.totals.netSalary)}</td>
-                </tr>
-              ) : null}
-              {report && !report.rows.length ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-muted">
-                    No active employees. Add salary on Employee records first.
-                  </td>
+                  <td className="px-4 py-3">{report.totals.countedAbsentDays}</td>
+                  <td className="px-4 py-3 text-signal">{taka(report.totals.absentFine)}</td>
+                  <td className="px-4 py-3 text-teal">{taka(report.totals.adjustedSalary)}</td>
+                  <td className="px-4 py-3" />
                 </tr>
               ) : null}
             </tbody>

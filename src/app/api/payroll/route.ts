@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { buildMonthlyPayroll, currentPayrollMonth } from "@/lib/payroll";
 
 const settingsSchema = z.object({
-  latePenalty: z.coerce.number().int().min(0).max(20_000_000),
-  absentPenalty: z.coerce.number().int().min(0).max(20_000_000),
+  absentGroupSize: z.coerce.number().int().min(1).max(31),
 });
 
 export async function GET(request: Request) {
@@ -27,8 +26,8 @@ export async function PUT(request: Request) {
     const body = settingsSchema.parse(await readJson(request));
     const settings = await prisma.payrollSetting.upsert({
       where: { id: "default" },
-      create: { id: "default", latePenalty: body.latePenalty, absentPenalty: body.absentPenalty },
-      update: { latePenalty: body.latePenalty, absentPenalty: body.absentPenalty },
+      create: { id: "default", absentGroupSize: body.absentGroupSize },
+      update: { absentGroupSize: body.absentGroupSize },
     });
     await writeAudit({
       adminId: admin.id,
