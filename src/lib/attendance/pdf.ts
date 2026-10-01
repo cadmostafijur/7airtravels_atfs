@@ -79,7 +79,7 @@ function columnWidths(headers: string[], inner: number, presence: boolean) {
     if (key === "name" || key === "employee") return 3;
     if (key === "department" || key === "dept" || key === "punches") return 2.4;
     if (key === "date" || key === "time" || key === "reason") return 2.2;
-    if (key === "status") return 1.6;
+    if (key === "status" || key.includes("hours")) return 1.6;
     return 1.2;
   });
   const total = weights.reduce((sum, w) => sum + w, 0);
@@ -92,6 +92,7 @@ function reportTitle(type: string) {
     daily: "Daily attendance",
     weekly: "Weekly summary",
     monthly: "Monthly summary",
+    summary: "Monthly employee attendance summary",
     employee: "Employee-wise attendance",
     department: "Department-wise attendance",
     late: "Late arrivals",

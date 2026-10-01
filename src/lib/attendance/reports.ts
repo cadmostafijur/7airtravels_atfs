@@ -2,7 +2,7 @@ import "server-only";
 
 import type { DailyAttendanceSummary, Employee, Department } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatDate, formatTime, startOfZonedDay, endOfZonedDay, workDateKey, addDaysKey } from "@/lib/time";
+import { formatDate, formatTime, minutesOfDay, parseHm, startOfZonedDay, endOfZonedDay, workDateKey, addDaysKey } from "@/lib/time";
 import { formatHours, isoWeekKey, monthKey } from "@/lib/hours";
 import { summaryWhere } from "@/lib/attendance/stats";
 import { loadPunchBundlesForSummaries, summaryPunchKey } from "@/lib/attendance/punches";
@@ -278,6 +278,10 @@ export async function buildReport(query: ReportQuery): Promise<BuiltReport> {
     };
   }
 
+  if (type === "summary") {
+    return employeeMonthSummary(query);
+  }
+
   const summaries = (await loadSummaries(query)) as Row[];
 
   if (type === "weekly") {
@@ -345,6 +349,119 @@ export async function buildReport(query: ReportQuery): Promise<BuiltReport> {
   };
 }
 
+async function employeeMonthSummary(query: ReportQuery): Promise<BuiltReport> {
+  const shift = await prisma.shift.findFirst({ where: { isDefault: true } });
+  const lateAfter = parseHm(shift?.lateThreshold || "10:10");
+  const officeEnd = parseHm(shift?.officeEnd || "19:00");
+  const otAfter = parseHm(shift?.overtimeAfter || shift?.officeEnd || "19:00");
+  const startLabel = shift?.lateThreshold || "10:10";
+  const endLabel = shift?.officeEnd || "19:00";
+  const summaries = (await loadSummaries({ ...query, type: "summary", status: undefined })) as Row[];
+
+  const totals = new Map<
+    string,
+    { present: number; lateDays: number; absent: number; worked: number; late: number; early: number; otDays: number; ot: number }
+  >();
+  for (const row of summaries) {
+    const current = totals.get(row.employeeId) ?? {
+      present: 0,
+      lateDays: 0,
+      absent: 0,
+      worked: 0,
+      late: 0,
+      early: 0,
+      otDays: 0,
+      ot: 0,
+    };
+    if (["PRESENT", "LATE", "OVERTIME", "EARLY_LEAVE", "HALF_DAY"].includes(row.status)) current.present += 1;
+    if (row.status === "ABSENT") current.absent += 1;
+    current.worked += row.workedMinutes;
+    if (row.checkInAt) {
+      const inMin = minutesOfDay(row.checkInAt, shift?.timezone);
+      if (inMin > lateAfter) {
+        current.late += inMin - lateAfter;
+        current.lateDays += 1;
+      }
+    }
+    if (row.checkOutAt) {
+      const outMin = minutesOfDay(row.checkOutAt, shift?.timezone);
+      if (outMin < officeEnd) current.early += officeEnd - outMin;
+      if (outMin > otAfter) {
+        current.ot += outMin - otAfter;
+        current.otDays += 1;
+      }
+    }
+    totals.set(row.employeeId, current);
+  }
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      AND: [
+        query.employeeId ? { id: query.employeeId } : {},
+        query.departmentId ? { departmentId: query.departmentId } : {},
+        query.q
+          ? {
+              OR: [
+                { name: { contains: query.q, mode: "insensitive" } },
+                { employeeCode: { contains: query.q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+        { OR: [{ status: "ACTIVE" }, { id: { in: [...totals.keys()] } }] },
+      ],
+    },
+    include: { department: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = employees.map((employee) => {
+    const value = totals.get(employee.id) ?? {
+      present: 0,
+      lateDays: 0,
+      absent: 0,
+      worked: 0,
+      late: 0,
+      early: 0,
+      otDays: 0,
+      ot: 0,
+    };
+    return {
+      id: employee.id,
+      name: employee.name,
+      employeeCode: employee.employeeCode,
+      department: employee.department?.name ?? "",
+      present: value.present,
+      late: value.lateDays,
+      absent: value.absent,
+      "Working hours": formatHours(value.worked),
+      "Late hours": formatHours(value.late),
+      "Early hours": formatHours(value.early),
+      "OT count": value.otDays,
+      "OT hours": formatHours(value.ot),
+    };
+  });
+
+  return {
+    type: "summary",
+    title: "Monthly employee attendance summary",
+    subtitle: `Office time ${startLabel} to ${endLabel}. Late hours are after ${startLabel}. Early hours are time left before ${endLabel}. OT count is days worked past ${endLabel}.`,
+    columns: [
+      "Employee",
+      "Code",
+      "Department",
+      "Present",
+      "Late",
+      "Absent",
+      "Working hours",
+      "Late hours",
+      "Early hours",
+      "OT count",
+      "OT hours",
+    ],
+    rows,
+  };
+}
+
 function exportText(value: unknown) {
   return String(value ?? "")
     .replaceAll("→", "->")
@@ -366,7 +483,11 @@ export function exportMatrix(report: Awaited<ReturnType<typeof buildReport>>) {
       if (key === "late") return String(record.lateMinutes ?? record.late ?? "");
       if (key === "early") return String(record.earlyMinutes ?? "");
       if (key === "ot") return String(record.overtimeMinutes ?? "");
-      if (key === "hours") return String(record.hours ?? "");
+      if (key === "hours" || key === "working hours") return String(record.hours ?? record["Working hours"] ?? "");
+      if (key === "late hours") return String(record["Late hours"] ?? "");
+      if (key === "early hours") return String(record["Early hours"] ?? "");
+      if (key === "ot count") return String(record["OT count"] ?? "");
+      if (key === "ot hours") return String(record["OT hours"] ?? "");
       if (key === "from") return String(record.from ?? "");
       if (key === "to") return String(record.to ?? "");
       if (key === "time") return String(record.time ?? "");

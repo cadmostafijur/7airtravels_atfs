@@ -23,6 +23,7 @@ const types = [
   { id: "presence", label: "Presence register" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
+  { id: "summary", label: "Monthly employee summary" },
   { id: "employee", label: "Employee-wise" },
   { id: "department", label: "Department-wise" },
   { id: "late", label: "Late" },
@@ -164,7 +165,7 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Exports"
         title="Attendance reports"
-        description="Daily entries include Date, Code, Name, Department, Status, In, Out, Punches, Late, Early, OT, and Hours. CSV and Excel both include this full data."
+        description="Monthly employee summary lists working hours, late hours, early hours, and overtime for office time 10:10 AM to 7:00 PM. Use PDF to download that table."
         actions={
           <>
             <Button variant="outline" disabled={downloading !== null} onClick={() => void download("csv")}>
@@ -241,6 +242,13 @@ export default function ReportsPage() {
         ) : null}
         <Button onClick={() => void load()}>Apply</Button>
       </div>
+      {type === "summary" ? (
+        <p className="mb-3 text-xs text-muted">
+          Office time is 10:10 AM to 7:00 PM. Working hours are time between check-in and check-out. Late hours start
+          after 10:10. Early hours are time left before 7:00 PM. OT count is the number of days worked past 7:00 PM.
+          PDF downloads this table.
+        </p>
+      ) : null}
       {type === "presence" ? (
         <p className="mb-3 text-xs text-muted">
           P Present · L Late · A Absent · V Leave · H Holiday · W Weekend · HD Half-day · E Early · - No record
