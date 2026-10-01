@@ -3,8 +3,9 @@ import "server-only";
 import type { PayrollRecord, PayrollStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
-import { minutesOfDay, parseHm } from "@/lib/time";
 import {
+  absencesFromLateDays,
+  absentFineAmount,
   adjustedSalaryAmount,
   dailyAbsentPenalty,
   monthDateKeys,
@@ -45,6 +46,7 @@ type Calc = {
   lateDays: number;
   lateMinutes: number;
   absentDays: number;
+  lateAbsences: number;
   dailyPenalty: number;
   calculatedFine: number;
 };
@@ -52,8 +54,6 @@ type Calc = {
 async function monthContext(month: string) {
   const shift = await prisma.shift.findFirst({ where: { isDefault: true } });
   const weekendDays = shift?.weekendDays ?? [5, 6];
-  const lateAfter = parseHm(shift?.lateThreshold || "10:10");
-  const timezone = shift?.timezone || "Asia/Dhaka";
   const { start, end } = monthBounds(month);
   const holidays = await prisma.holiday.findMany({
     where: { date: { gte: start, lte: end } },
@@ -61,13 +61,11 @@ async function monthContext(month: string) {
   });
   const holidayKeys = holidays.map((row) => row.date.toISOString().slice(0, 10));
   const workingDays = workingDayKeys(month, weekendDays, holidayKeys).length;
-  return { shift, lateAfter, timezone, start, end, workingDays, weekendDays };
+  return { shift, start, end, workingDays, weekendDays };
 }
 
 function statsFor(
-  summaries: Array<{ status: string; checkInAt: Date | null }>,
-  lateAfter: number,
-  timezone: string,
+  summaries: Array<{ status: string; lateMinutes: number }>,
   salary: number,
   workingDays: number,
 ): Calc {
@@ -76,14 +74,12 @@ function statsFor(
   let lateDays = 0;
   let lateMinutes = 0;
   for (const row of summaries) {
-    if (!row.checkInAt) continue;
-    const arrived = minutesOfDay(row.checkInAt, timezone);
-    if (arrived > lateAfter) {
-      lateDays += 1;
-      lateMinutes += arrived - lateAfter;
-    }
+    if (row.status !== "LATE") continue;
+    lateDays += 1;
+    lateMinutes += Math.max(0, row.lateMinutes);
   }
   const dailyPenalty = dailyAbsentPenalty(salary, workingDays);
+  const lateAbsences = absencesFromLateDays(lateDays);
   return {
     monthlySalary: salary,
     workingDays,
@@ -91,8 +87,9 @@ function statsFor(
     lateDays,
     lateMinutes,
     absentDays,
+    lateAbsences,
     dailyPenalty,
-    calculatedFine: dailyPenalty * absentDays,
+    calculatedFine: dailyPenalty * (absentDays + lateAbsences),
   };
 }
 
@@ -110,6 +107,7 @@ export type PayrollRow = {
   lateDays: number;
   lateMinutes: number;
   absentDays: number;
+  lateAbsences: number;
   dailyPenalty: number;
   calculatedFine: number;
   absentFine: number;
@@ -137,6 +135,7 @@ function toRow(
     lateDays: record.lateDays,
     lateMinutes: record.lateMinutes,
     absentDays: record.absentDays,
+    lateAbsences: record.countedAbsentDays,
     dailyPenalty: record.dailyPenalty,
     calculatedFine: record.calculatedFine,
     absentFine: record.absentFine,
@@ -157,7 +156,7 @@ export async function buildMonthlyPayroll(month: string) {
       department: true,
       summaries: {
         where: { workDate: { gte: start, lte: end } },
-        select: { status: true, checkInAt: true },
+        select: { status: true, lateMinutes: true },
       },
       payrollRecords: { where: { month: safe } },
     },
@@ -166,7 +165,7 @@ export async function buildMonthlyPayroll(month: string) {
 
   const rows: PayrollRow[] = [];
   for (const employee of employees) {
-    const calc = statsFor(employee.summaries, ctx.lateAfter, ctx.timezone, employee.monthlySalary, ctx.workingDays);
+    const calc = statsFor(employee.summaries, employee.monthlySalary, ctx.workingDays);
     if (safe === currentPayrollMonth()) {
       const standingPenalty = dailyAbsentPenalty(employee.monthlySalary, ctx.workingDays);
       if (employee.absentPenalty !== standingPenalty) {
@@ -181,7 +180,7 @@ export async function buildMonthlyPayroll(month: string) {
 
     const monthlySalary = existing?.salaryOverridden ? existing.monthlySalary : calc.monthlySalary;
     const dailyPenalty = dailyAbsentPenalty(monthlySalary, calc.workingDays);
-    const calculatedFine = dailyPenalty * calc.absentDays;
+    const calculatedFine = absentFineAmount(monthlySalary, calc.workingDays, calc.absentDays, calc.lateDays);
     const absentFine = existing?.fineOverridden ? existing.absentFine : calculatedFine;
     const data = {
       monthlySalary,
@@ -190,7 +189,7 @@ export async function buildMonthlyPayroll(month: string) {
       lateDays: calc.lateDays,
       lateMinutes: calc.lateMinutes,
       absentDays: calc.absentDays,
-      countedAbsentDays: calc.absentDays,
+      countedAbsentDays: calc.lateAbsences,
       dailyPenalty,
       calculatedFine,
       absentFine,
@@ -212,13 +211,15 @@ export async function buildMonthlyPayroll(month: string) {
   const totals = rows.reduce(
     (acc, row) => ({
       monthlySalary: acc.monthlySalary + row.monthlySalary,
+      lateDays: acc.lateDays + row.lateDays,
       lateMinutes: acc.lateMinutes + row.lateMinutes,
       absentDays: acc.absentDays + row.absentDays,
+      lateAbsences: acc.lateAbsences + row.lateAbsences,
       absentFine: acc.absentFine + row.absentFine,
       adjustedSalary: acc.adjustedSalary + row.adjustedSalary,
       paid: acc.paid + (row.status === "PAID" ? 1 : 0),
     }),
-    { monthlySalary: 0, lateMinutes: 0, absentDays: 0, absentFine: 0, adjustedSalary: 0, paid: 0 },
+    { monthlySalary: 0, lateDays: 0, lateMinutes: 0, absentDays: 0, lateAbsences: 0, absentFine: 0, adjustedSalary: 0, paid: 0 },
   );
 
   return {
@@ -229,7 +230,7 @@ export async function buildMonthlyPayroll(month: string) {
     lateAfter: ctx.shift?.lateThreshold ?? "10:10",
     weekendDays: ctx.weekendDays,
     settings: {
-      formula: "penalty = salary / working days; fine = penalty × absent days",
+      formula: "every 3 late days count as 1 absence; fine = penalty × (absent days + those absences)",
     },
     rows,
     totals,
@@ -262,7 +263,7 @@ export async function updatePayrollRecord(
   if (input.useCalculatedFine || (input.monthlySalary != null && !fineOverridden)) {
     if (input.useCalculatedFine) fineOverridden = false;
     dailyPenalty = dailyAbsentPenalty(monthlySalary, record.workingDays);
-    calculatedFine = dailyPenalty * record.absentDays;
+    calculatedFine = absentFineAmount(monthlySalary, record.workingDays, record.absentDays, record.lateDays);
     absentFine = calculatedFine;
   }
   if (input.absentFine != null && !input.useCalculatedFine) {

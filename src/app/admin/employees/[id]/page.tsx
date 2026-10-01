@@ -281,9 +281,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               />
             </div>
             <p className="text-xs text-muted md:col-span-2">
-              Absent penalty per day is salary divided by the month’s working days, and it is filled in for everyone when
-              Salary opens. Fine is that penalty times every absent day. You can change the fine there before marking the
-              month paid.
+              Every 3 late days count as 1 absence. The daily penalty is salary divided by working days, and the fine is that
+              penalty times absent days plus those extra absences. You can change the fine on Salary before marking the month
+              paid.
             </p>
             <div>
               <Label>Device user ID</Label>

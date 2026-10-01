@@ -6,11 +6,16 @@ export function dailyAbsentPenalty(monthlySalary: number, workingDays: number) {
   return Math.round(salary / days);
 }
 
-/** Fine = daily penalty × every absent day in the month. */
-export function absentFineAmount(monthlySalary: number, workingDays: number, absentDays: number) {
-  const absent = Math.max(0, Math.floor(absentDays));
-  if (absent === 0) return 0;
-  return dailyAbsentPenalty(monthlySalary, workingDays) * absent;
+/** Every 3 late days count as 1 absence. */
+export function absencesFromLateDays(lateDays: number) {
+  return Math.floor(Math.max(0, Math.floor(lateDays)) / 3);
+}
+
+/** Fine = daily penalty × (absent days + one absence for every 3 late days). */
+export function absentFineAmount(monthlySalary: number, workingDays: number, absentDays: number, lateDays = 0) {
+  const days = Math.max(0, Math.floor(absentDays)) + absencesFromLateDays(lateDays);
+  if (days === 0) return 0;
+  return dailyAbsentPenalty(monthlySalary, workingDays) * days;
 }
 
 export function adjustedSalaryAmount(monthlySalary: number, fine: number) {

@@ -18,8 +18,10 @@ type PayrollRow = {
   monthlySalary: number;
   workingDays: number;
   presentDays: number;
+  lateDays: number;
   lateMinutes: number;
   absentDays: number;
+  lateAbsences: number;
   dailyPenalty: number;
   calculatedFine: number;
   absentFine: number;
@@ -37,8 +39,10 @@ type PayrollReport = {
   rows: PayrollRow[];
   totals: {
     monthlySalary: number;
+    lateDays: number;
     lateMinutes: number;
     absentDays: number;
+    lateAbsences: number;
     absentFine: number;
     adjustedSalary: number;
     paid: number;
@@ -116,7 +120,7 @@ export default function PayrollPage() {
       <PageHeader
         eyebrow="Month-end"
         title="Monthly payroll"
-        description="Each month is recalculated from attendance. Absent penalty per day is salary divided by working days, and the fine is that penalty times every absent day. Adjusted salary updates with the fine. A typed fine stays until you reset it."
+        description="Each month is recalculated from attendance. Every 3 late days count as 1 absence, and that absence is added to the fine. Adjusted salary updates with the fine. A typed fine stays until you reset it."
         actions={
           <>
             <Link href="/admin/payroll/history">
@@ -142,10 +146,9 @@ export default function PayrollPage() {
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
           <p className="w-full text-xs text-muted">
-            Late hours are time after {report?.lateAfter ?? "10:10"} (change it on Shifts). This month has{" "}
-            {report?.workingDays ?? "—"} working days after Friday, Saturday, and holidays. Penalty per day = monthly salary /
-            working days. Fine = penalty × absent days. Opening this page refreshes every unpaid row. You can type a different
-            fine; adjusted salary follows that number.
+            A day is late when check-in is after {report?.lateAfter ?? "10:10"}. Every 3 late days count as 1 absence. This
+            month has {report?.workingDays ?? "—"} working days. Penalty per day = monthly salary / working days. Fine = penalty ×
+            (absent days + absences from lates). Opening this page refreshes every unpaid row.
           </p>
         </CardContent>
       </Card>
@@ -159,8 +162,10 @@ export default function PayrollPage() {
                 <th className="px-4 py-3">Salary</th>
                 <th className="px-4 py-3">Penalty / day</th>
                 <th className="px-4 py-3">Present</th>
+                <th className="px-4 py-3">Late</th>
                 <th className="px-4 py-3">Late hours</th>
                 <th className="px-4 py-3">Absent</th>
+                <th className="px-4 py-3">From 3 lates</th>
                 <th className="px-4 py-3">Fine</th>
                 <th className="px-4 py-3">Adjusted</th>
                 <th className="px-4 py-3">Paid</th>
@@ -181,8 +186,10 @@ export default function PayrollPage() {
                     <td className="px-4 py-3">{taka(row.monthlySalary)}</td>
                     <td className="px-4 py-3">{taka(row.dailyPenalty)}</td>
                     <td className="px-4 py-3">{row.presentDays}</td>
+                    <td className="px-4 py-3">{row.lateDays}</td>
                     <td className="px-4 py-3 font-mono">{formatHours(row.lateMinutes)}</td>
                     <td className="px-4 py-3">{row.absentDays}</td>
+                    <td className="px-4 py-3">{row.lateAbsences}</td>
                     <td className="px-4 py-3">
                       <Input
                         type="number"
@@ -241,8 +248,10 @@ export default function PayrollPage() {
                   <td className="px-4 py-3">{taka(report.totals.monthlySalary)}</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3" />
+                  <td className="px-4 py-3">{report.totals.lateDays}</td>
                   <td className="px-4 py-3 font-mono">{formatHours(report.totals.lateMinutes)}</td>
                   <td className="px-4 py-3">{report.totals.absentDays}</td>
+                  <td className="px-4 py-3">{report.totals.lateAbsences}</td>
                   <td className="px-4 py-3 text-signal">{taka(report.totals.absentFine)}</td>
                   <td className="px-4 py-3 text-teal">{taka(report.totals.adjustedSalary)}</td>
                   <td className="px-4 py-3" />
