@@ -23,6 +23,8 @@ New-Item -ItemType Directory -Force -Path $startupDir | Out-Null
 
 $bat = @"
 @echo off
+netstat -ano | findstr ":3001" | findstr "LISTENING" >nul
+if %errorlevel%==0 exit /b 0
 cd /d "$repoRoot"
 "$nodeExe" "$tsxCli" --require "$stub" "$worker"
 "@
@@ -35,8 +37,14 @@ Set WshShell = Nothing
 "@
 Set-Content -Path $vbsPath -Value $vbs -Encoding ASCII
 
+$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$vbsPath`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "7AirTravels-ATFS-Worker" -Action $action -Trigger $trigger -Principal $principal -Description "Starts the attendance worker when this user signs in." -Force | Out-Null
+
 Write-Host "Repo: $repoRoot"
 Write-Host "Startup: $vbsPath"
+Write-Host "Sign-in task: 7AirTravels-ATFS-Worker"
 Write-Host ""
 
 # Start now in background (hidden)
