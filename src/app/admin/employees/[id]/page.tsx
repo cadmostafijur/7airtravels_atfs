@@ -281,8 +281,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               />
             </div>
             <p className="text-xs text-muted md:col-span-2">
-              Month-end fine is calculated on Salary: every 3 absents count as 1 day, then (salary / working days) × that
-              count. You can change the fine there before marking the month paid.
+              Absent penalty per day is salary divided by the month’s working days, and it is filled in for everyone when
+              Salary opens. Fine is that penalty times every absent day. You can change the fine there before marking the
+              month paid.
             </p>
             <div>
               <Label>Device user ID</Label>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/field";
 import { api } from "@/lib/api";
+import { formatHours } from "@/lib/hours";
 import { formatDateTime } from "@/lib/time";
 
 type HistoryRow = {
@@ -17,8 +18,9 @@ type HistoryRow = {
   employeeCode: string;
   department: string;
   monthlySalary: number;
+  lateMinutes: number;
   absentDays: number;
-  countedAbsentDays: number;
+  dailyPenalty: number;
   absentFine: number;
   fineOverridden: boolean;
   adjustedSalary: number;
@@ -151,8 +153,9 @@ export default function PayrollHistoryPage() {
                 <th className="px-4 py-3">Month</th>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Salary</th>
+                <th className="px-4 py-3">Penalty / day</th>
+                <th className="px-4 py-3">Late hours</th>
                 <th className="px-4 py-3">Absent</th>
-                <th className="px-4 py-3">Counted</th>
                 <th className="px-4 py-3">Fine</th>
                 <th className="px-4 py-3">Adjusted</th>
               </tr>
@@ -167,8 +170,9 @@ export default function PayrollHistoryPage() {
                     <div className="text-xs text-muted">{row.employeeCode}</div>
                   </td>
                   <td className="px-4 py-3">{taka(row.monthlySalary)}</td>
+                  <td className="px-4 py-3">{taka(row.dailyPenalty)}</td>
+                  <td className="px-4 py-3 font-mono">{formatHours(row.lateMinutes)}</td>
                   <td className="px-4 py-3">{row.absentDays}</td>
-                  <td className="px-4 py-3">{row.countedAbsentDays}</td>
                   <td className="px-4 py-3">
                     {taka(row.absentFine)}
                     {row.fineOverridden ? <div className="text-[11px] text-brass">Manual</div> : null}

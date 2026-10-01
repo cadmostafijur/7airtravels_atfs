@@ -359,8 +359,9 @@ export default function EmployeesPage() {
             />
           </div>
           <p className="text-xs text-muted md:col-span-2">
-            Month-end fine is calculated on Salary: every 3 absents count as 1 day, then (salary / working days) × that
-            count. You can change the fine there before marking the month paid.
+            Absent penalty per day is salary divided by the month’s working days, and it is filled in for everyone when
+            Salary opens. Fine is that penalty times every absent day. You can change the fine there before marking the
+            month paid.
           </p>
           <div>
             <Label>Joining date (optional)</Label>
@@ -506,6 +507,7 @@ export default function EmployeesPage() {
                 <th className="px-5 py-3">Contact</th>
                 <th className="px-5 py-3">Department</th>
                 <th className="px-5 py-3">Salary</th>
+                <th className="px-5 py-3">Penalty / day</th>
                 <th className="px-5 py-3">Joined</th>
                 <th className="px-5 py-3">NID</th>
                 <th className="px-5 py-3">Device UID</th>
@@ -530,6 +532,7 @@ export default function EmployeesPage() {
                   </td>
                   <td className="px-5 py-3">{row.department?.name ?? "—"}</td>
                   <td className="px-5 py-3">{row.monthlySalary ? `Tk ${row.monthlySalary.toLocaleString("en-BD")}` : "—"}</td>
+                  <td className="px-5 py-3">{row.absentPenalty != null ? `Tk ${row.absentPenalty.toLocaleString("en-BD")}` : "—"}</td>
                   <td className="px-5 py-3">{formatDate(row.joinedAt)}</td>
                   <td className="px-5 py-3 text-xs">
                     <div>{row.nidNumber ?? "—"}</div>

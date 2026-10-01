@@ -1,17 +1,16 @@
-/** Every `groupSize` raw absent days count as one absent day in the fine. */
-export function countedAbsentDays(rawAbsentDays: number, groupSize: number) {
-  const raw = Math.max(0, Math.floor(rawAbsentDays));
-  const size = Math.max(1, Math.floor(groupSize));
-  return Math.floor(raw / size);
+/** Taka per absent day: monthly salary / working days, rounded to the nearest taka. */
+export function dailyAbsentPenalty(monthlySalary: number, workingDays: number) {
+  const salary = Math.max(0, Math.round(monthlySalary));
+  const days = Math.max(0, Math.floor(workingDays));
+  if (salary === 0 || days === 0) return 0;
+  return Math.round(salary / days);
 }
 
-/** (monthly salary / working days) × counted absent days, rounded to the nearest taka. */
-export function absentFineAmount(monthlySalary: number, workingDays: number, countedDays: number) {
-  const salary = Math.max(0, monthlySalary);
-  const days = Math.max(0, workingDays);
-  const counted = Math.max(0, countedDays);
-  if (salary === 0 || days === 0 || counted === 0) return 0;
-  return Math.round((salary / days) * counted);
+/** Fine = daily penalty × every absent day in the month. */
+export function absentFineAmount(monthlySalary: number, workingDays: number, absentDays: number) {
+  const absent = Math.max(0, Math.floor(absentDays));
+  if (absent === 0) return 0;
+  return dailyAbsentPenalty(monthlySalary, workingDays) * absent;
 }
 
 export function adjustedSalaryAmount(monthlySalary: number, fine: number) {

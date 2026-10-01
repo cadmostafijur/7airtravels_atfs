@@ -349,8 +349,8 @@ model PayrollSetting {
   id              String   @id @default("default")
   latePenalty     Int      @default(200)
   absentPenalty   Int      @default(500)
-  /// Raw absent days divided by this number (rounded down) become the days used in the fine.
-  absentGroupSize Int      @default(3)
+  /// Kept for older rows. The fine now uses every absent day, not a grouped count.
+  absentGroupSize Int      @default(1)
   currency        String   @default("BDT")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -370,8 +370,12 @@ model PayrollRecord {
   workingDays       Int
   presentDays       Int
   lateDays          Int
+  /// Minutes after the shift late time, summed for the month.
+  lateMinutes       Int           @default(0)
   absentDays        Int
   countedAbsentDays Int
+  /// Tk per absent day: monthly salary / working days.
+  dailyPenalty      Int           @default(0)
   calculatedFine    Int
   absentFine        Int
   fineOverridden    Boolean       @default(false)

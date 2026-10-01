@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { requireApiSession } from "@/lib/auth/guards";
 import { jsonError } from "@/lib/http";
 import { buildAttendancePdf } from "@/lib/attendance/pdf";
+import { formatHours } from "@/lib/hours";
 import { buildMonthlyPayroll, currentPayrollMonth } from "@/lib/payroll";
 
 export const runtime = "nodejs";
@@ -26,10 +27,10 @@ export async function GET(request: Request) {
       "Department",
       "Base salary",
       "Working days",
+      "Penalty per day",
       "Present",
-      "Late",
+      "Late hours",
       "Absent",
-      "Counted absent",
       "Absent fine",
       "Adjusted salary",
       "Status",
@@ -40,10 +41,10 @@ export async function GET(request: Request) {
       row.department,
       String(row.monthlySalary),
       String(row.workingDays),
+      String(row.dailyPenalty),
       String(row.presentDays),
-      String(row.lateDays),
+      formatHours(row.lateMinutes),
       String(row.absentDays),
-      String(row.countedAbsentDays),
       String(row.absentFine),
       String(row.adjustedSalary),
       row.status,
@@ -55,9 +56,9 @@ export async function GET(request: Request) {
       String(report.totals.monthlySalary),
       "",
       "",
-      String(report.totals.lateDays),
+      "",
+      formatHours(report.totals.lateMinutes),
       String(report.totals.absentDays),
-      String(report.totals.countedAbsentDays),
       String(report.totals.absentFine),
       String(report.totals.adjustedSalary),
       "",
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
       const bytes = await buildAttendancePdf({
         type: "payroll",
         title: `Month-end payroll - ${month}`,
-        subtitle: `${report.from} to ${report.to}  |  ${report.workingDays} working days  |  every ${report.settings.absentGroupSize} absents count as 1  |  fine = salary / working days x counted absents`,
+        subtitle: `${report.from} to ${report.to}  |  ${report.workingDays} working days  |  penalty = salary / working days  |  fine = penalty x absent days`,
         header,
         rows,
       });

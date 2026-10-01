@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/field";
 import { api } from "@/lib/api";
+import { formatHours } from "@/lib/hours";
 
 type PayrollRow = {
   id: string;
@@ -17,9 +18,9 @@ type PayrollRow = {
   monthlySalary: number;
   workingDays: number;
   presentDays: number;
-  lateDays: number;
+  lateMinutes: number;
   absentDays: number;
-  countedAbsentDays: number;
+  dailyPenalty: number;
   calculatedFine: number;
   absentFine: number;
   fineOverridden: boolean;
@@ -33,13 +34,11 @@ type PayrollReport = {
   to: string;
   workingDays: number;
   lateAfter: string;
-  settings: { absentGroupSize: number };
   rows: PayrollRow[];
   totals: {
     monthlySalary: number;
-    lateDays: number;
+    lateMinutes: number;
     absentDays: number;
-    countedAbsentDays: number;
     absentFine: number;
     adjustedSalary: number;
     paid: number;
@@ -57,16 +56,13 @@ function taka(value: number) {
 export default function PayrollPage() {
   const [month, setMonth] = useState(currentMonth);
   const [report, setReport] = useState<PayrollReport | null>(null);
-  const [groupSize, setGroupSize] = useState("3");
   const [fines, setFines] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   async function load(nextMonth = month) {
     const data = await api<PayrollReport>(`/api/payroll?month=${nextMonth}`);
     setReport(data);
-    setGroupSize(String(data.settings.absentGroupSize));
     setFines(Object.fromEntries(data.rows.map((row) => [row.id, String(row.absentFine)])));
   }
 
@@ -75,19 +71,6 @@ export default function PayrollPage() {
       toast.error(error instanceof Error ? error.message : "Failed to load payroll");
     });
   }, [month]);
-
-  async function saveRule() {
-    setSaving(true);
-    try {
-      await api("/api/payroll", { method: "PUT", body: JSON.stringify({ absentGroupSize: Number(groupSize) }) });
-      toast.success("Absent rule saved");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function patch(id: string, body: Record<string, unknown>, ok: string) {
     setBusyId(id);
@@ -133,7 +116,7 @@ export default function PayrollPage() {
       <PageHeader
         eyebrow="Month-end"
         title="Monthly payroll"
-        description="Each month gets one salary record per employee. Check-in after the shift late time counts as late. Every 3 absents count as 1, and the fine is salary divided by working days."
+        description="Each month is recalculated from attendance. Absent penalty per day is salary divided by working days, and the fine is that penalty times every absent day. Adjusted salary updates with the fine. A typed fine stays until you reset it."
         actions={
           <>
             <Link href="/admin/payroll/history">
@@ -158,17 +141,11 @@ export default function PayrollPage() {
             <Label>Month</Label>
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
-          <div>
-            <Label>Absents that count as 1</Label>
-            <Input type="number" min={1} value={groupSize} onChange={(e) => setGroupSize(e.target.value)} />
-          </div>
-          <Button disabled={saving} onClick={() => void saveRule()}>
-            {saving ? "Saving…" : "Save rule"}
-          </Button>
           <p className="w-full text-xs text-muted">
-            Late after {report?.lateAfter ?? "10:10"} (change it on Shifts). This month has {report?.workingDays ?? "—"} working
-            days after Friday, Saturday, and holidays you mark on the calendar. Fine = (monthly salary / working days) × counted
-            absents. You can type a different fine on a row before marking it paid.
+            Late hours are time after {report?.lateAfter ?? "10:10"} (change it on Shifts). This month has{" "}
+            {report?.workingDays ?? "—"} working days after Friday, Saturday, and holidays. Penalty per day = monthly salary /
+            working days. Fine = penalty × absent days. Opening this page refreshes every unpaid row. You can type a different
+            fine; adjusted salary follows that number.
           </p>
         </CardContent>
       </Card>
@@ -180,10 +157,10 @@ export default function PayrollPage() {
               <tr>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Salary</th>
+                <th className="px-4 py-3">Penalty / day</th>
                 <th className="px-4 py-3">Present</th>
-                <th className="px-4 py-3">Late</th>
+                <th className="px-4 py-3">Late hours</th>
                 <th className="px-4 py-3">Absent</th>
-                <th className="px-4 py-3">Counted</th>
                 <th className="px-4 py-3">Fine</th>
                 <th className="px-4 py-3">Adjusted</th>
                 <th className="px-4 py-3">Paid</th>
@@ -202,10 +179,10 @@ export default function PayrollPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">{taka(row.monthlySalary)}</td>
+                    <td className="px-4 py-3">{taka(row.dailyPenalty)}</td>
                     <td className="px-4 py-3">{row.presentDays}</td>
-                    <td className="px-4 py-3">{row.lateDays}</td>
+                    <td className="px-4 py-3 font-mono">{formatHours(row.lateMinutes)}</td>
                     <td className="px-4 py-3">{row.absentDays}</td>
-                    <td className="px-4 py-3">{row.countedAbsentDays}</td>
                     <td className="px-4 py-3">
                       <Input
                         type="number"
@@ -263,9 +240,9 @@ export default function PayrollPage() {
                   <td className="px-4 py-3">Total · {report.totals.paid} paid</td>
                   <td className="px-4 py-3">{taka(report.totals.monthlySalary)}</td>
                   <td className="px-4 py-3" />
-                  <td className="px-4 py-3">{report.totals.lateDays}</td>
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3 font-mono">{formatHours(report.totals.lateMinutes)}</td>
                   <td className="px-4 py-3">{report.totals.absentDays}</td>
-                  <td className="px-4 py-3">{report.totals.countedAbsentDays}</td>
                   <td className="px-4 py-3 text-signal">{taka(report.totals.absentFine)}</td>
                   <td className="px-4 py-3 text-teal">{taka(report.totals.adjustedSalary)}</td>
                   <td className="px-4 py-3" />
